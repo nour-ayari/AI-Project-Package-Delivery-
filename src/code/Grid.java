@@ -161,23 +161,18 @@ public static String GenGrid() {
     // --------------------------
     // 5) Tunnels (0 à 2 tunnels)
     // --------------------------
-    int T = rnd.nextInt(3); // 0,1,2 tunnels
+    int T = rnd.nextInt(3);
 
     for (int i = 0; i < T; i++) {
-        State A, B;
-        do {
-            A = new State(rnd.nextInt(cols), rnd.nextInt(rows));
-        } while (used.contains(A.x + "," + A.y));
+        State A = new State(rnd.nextInt(cols), rnd.nextInt(rows));
+        State B = new State(rnd.nextInt(cols), rnd.nextInt(rows));
 
-        do {
-            B = new State(rnd.nextInt(cols), rnd.nextInt(rows));
-        } while (A.equals(B));
-
-        g.tunnels.add(new Tunnel(A, B));
+        if (!A.equals(B))
+            g.tunnels.add(new Tunnel(A, B));
     }
 
     // --------------------------
-    // 6) TRAFFIC (always 1–4)
+    // 6) TRAFFIC 1–4
     // --------------------------
     for (int y = 0; y < g.rows; y++) {
         for (int x = 0; x < g.cols; x++) {
@@ -188,28 +183,26 @@ public static String GenGrid() {
     }
 
     // --------------------------
-    // 7) ROADBLOCKS (10–20% guaranteed)
+    // 7) ROADBLOCKS (10%)
     // --------------------------
     int blockCount = (int)(rows * cols * 0.1);
 
     for (int i = 0; i < blockCount; i++) {
         int x = rnd.nextInt(cols);
         int y = rnd.nextInt(rows);
-        int dir = rnd.nextInt(4); // up/down/left/right
+        int dir = rnd.nextInt(4);
 
         g.blockedRoads.add(new RoadBlock(new State(x,y), dirName(dir)));
-
-        // rendre le cost = 0 (optionnel)
-        g.traffic[y][x][dir] = 0;
+        g.traffic[y][x][dir] = 0; // block => cost 0
     }
 
     // --------------------------
-    // 8) Construire initialState + traffic
+    // 8) Construire initialState
     // --------------------------
     StringBuilder initial = new StringBuilder();
     StringBuilder trafficSb = new StringBuilder();
 
-    // FORMAT: m;n;P;S;
+    // HEADER
     initial.append(cols).append(";").append(rows).append(";")
            .append(P).append(";").append(S).append(";");
 
@@ -218,15 +211,21 @@ public static String GenGrid() {
         initial.append(d.x).append(",").append(d.y).append(",");
     initial.append(";");
 
+    // STORES  (AJOUTÉ !)
+    for (State s : g.stores)
+        initial.append(s.x).append(",").append(s.y).append(",");
+    initial.append(";");
+
     // TUNNELS
     for (Tunnel t : g.tunnels)
         initial.append(t.A.x).append(",").append(t.A.y).append(",")
                .append(t.B.x).append(",").append(t.B.y).append(",");
     initial.append(";");
 
-    // TRAFFIC (for parsing)
+    // TRAFFIC for parsing
     for (int y = 0; y < g.rows; y++) {
         for (int x = 0; x < g.cols; x++) {
+
             if (y > 0)
                 trafficSb.append(x+","+y+","+x+","+(y-1)+","+g.traffic[y][x][0]+";");
             if (y < g.rows-1)
@@ -240,9 +239,6 @@ public static String GenGrid() {
 
     return initial.toString() + "\n" + trafficSb.toString();
 }
-
-
-// helper pour transformer 0/1/2/3 en "up"/"down"/"left"/"right"
 private static String dirName(int d) {
     switch (d) {
         case 0: return "up";
@@ -252,4 +248,5 @@ private static String dirName(int d) {
         default: return "";
     }
 }
+
 }
