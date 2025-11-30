@@ -12,8 +12,7 @@ public class DeliveryPlanner {
         // 1) Parse Grid from strings
         Grid grid = parseGrid(initialState, traffic);
 
-        // 2) Optional UI
-        UIVisualizer ui = visualize ? new UIVisualizer(grid) : null;
+    // 2) Optional UI (we'll show per-plan visualizations via GridRenderer)
 
         StringBuilder output = new StringBuilder();
 
@@ -112,7 +111,7 @@ public class DeliveryPlanner {
                 // Visualize the path if needed
                 // ---------------------------------------------------------
                 if (visualize) {
-                    animatePlan(ui, grid, truckPos, bestResult.plan);
+                    animatePlan(grid, truckPos, bestResult.plan);
                 }
 
                 // Truck returns to store after each delivery (as per PDF)
@@ -132,26 +131,26 @@ public class DeliveryPlanner {
     // ======================================================================
     // ANIMATE PLAN IN THE UI
     // ======================================================================
-    private static void animatePlan(UIVisualizer ui, Grid grid, State start, String plan) {
+    private static void animatePlan(Grid grid, State start, String plan) {
+        // Build a State path from start following the plan string and show it
+        java.util.List<State> path = new ArrayList<>();
+        State current = new State(start.x, start.y);
+        path.add(current);
 
-    State current = new State(start.x, start.y);
-    ui.updateTruck(current);
+        if (plan != null && !plan.isEmpty()) {
+            String[] steps = plan.split(",");
+            for (String step : steps) {
+                current = grid.applyAction(current, step.trim());
+                path.add(current);
+            }
+        }
 
-    if (plan == null || plan.isEmpty())
-        return;
-
-    String[] steps = plan.split(",");
-
-    for (String step : steps) {
-
-        // Draw arrow BEFORE moving
-        ui.drawArrow(current, step.trim());
-
-        // Move truck
-        current = grid.applyAction(current, step.trim());
-        ui.updateTruck(current);
+        // Create a route (store and customer fields not used here) and show it
+        java.util.List<GridRenderer.Route> routes = new ArrayList<>();
+    routes.add(new GridRenderer.Route(path.get(0), path.get(path.size()-1), path, java.awt.Color.ORANGE));
+        // no execution traces for this simple display
+        GridRenderer.show(grid, routes, new ArrayList<>());
     }
-}
 
 
 
