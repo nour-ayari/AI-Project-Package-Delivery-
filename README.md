@@ -15,21 +15,6 @@ To properly create and manage **unit tests**, we require a **Maven project struc
 * Running all tests with a single command
 * Future project extensions and builds
 
-If you want to compile and run the project manually:
-### Compile and run Without Maven 
-**Compile:**
-```bash
-javac -d target/classes src/main/java/code/*.java
-````
-
-**Run:**
-
-```bash
-java -cp target/classes code.Main
-```
-
-
----
 
 ### Steps to Install Maven
 
@@ -73,11 +58,10 @@ mvn compile
 **Run the Main class:**
 
 ```bash
-mvn exec:java -Dexec.mainClass="code.Main"
+mvn exec:java
 ```
 
 ---
-
 ### Unit Testing
 
 * Place all test files in:
@@ -91,4 +75,18 @@ src/test/java/code/
 
 ```bash
 mvn test
+```
+
+---
+If you want to compile and run the project manually:
+### Compile and run Without Maven 
+**Compile:**
+```bash
+javac -d target/classes src/main/java/code/*.java
+````
+
+**Run:**
+
+```bash
+java -cp target/classes code.Main
 ```
