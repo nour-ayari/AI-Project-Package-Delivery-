@@ -6,7 +6,6 @@ public class GenericSearch {
     public static SearchResult BFS(SearchProblem problem) {
         State initial = problem.initialState();
         Node root = new Node(initial, null, null, 0, 0);
-
         Queue<Node> frontier = new LinkedList<>();
         Set<State> visited = new HashSet<>();
 
@@ -14,14 +13,17 @@ public class GenericSearch {
         visited.add(initial);
 
         int nodesExpanded = 0;
+        java.util.List<State> expandedOrder = new java.util.ArrayList<>();
 
         while (!frontier.isEmpty()) {
             Node current = frontier.poll();
             nodesExpanded++;
+            expandedOrder.add(current.state);
 
             if (problem.isGoal(current.state)) {
                 String plan = reconstructPlan(current);
-                return new SearchResult(plan, current.pathCost, nodesExpanded);
+                java.util.List<State> pathStates = reconstructPathStates(current);
+                return new SearchResult(plan, current.pathCost, nodesExpanded, expandedOrder, pathStates);
             }
 
             for (String action : problem.actions(current.state)) {
@@ -35,7 +37,7 @@ public class GenericSearch {
             }
         }
 
-        return new SearchResult("", -1, nodesExpanded); // no solution found
+        return new SearchResult("", -1, nodesExpanded, expandedOrder, new java.util.ArrayList<>()); // no solution found
     }
 
     // ------------------------------------------------------
@@ -50,15 +52,18 @@ public class GenericSearch {
 
         frontier.push(root);
         int nodesExpanded = 0;
+        java.util.List<State> expandedOrder = new java.util.ArrayList<>();
 
         while (!frontier.isEmpty()) {
 
             Node current = frontier.pop();
             nodesExpanded++;
+            expandedOrder.add(current.state);
 
             if (problem.isGoal(current.state)) {
                 String plan = reconstructPlan(current);
-                return new SearchResult(plan, current.pathCost, nodesExpanded);
+                java.util.List<State> pathStates = reconstructPathStates(current);
+                return new SearchResult(plan, current.pathCost, nodesExpanded, expandedOrder, pathStates);
             }
 
             if (visited.contains(current.state))
@@ -77,7 +82,7 @@ public class GenericSearch {
             }
         }
 
-        return new SearchResult("", -1, nodesExpanded);
+        return new SearchResult("", -1, nodesExpanded, expandedOrder, new java.util.ArrayList<>());
     }
 
     // ------------------------------------------------------
@@ -85,8 +90,8 @@ public class GenericSearch {
     // ------------------------------------------------------
     public static SearchResult ID(SearchProblem problem) {
         State initial = problem.initialState();
-
         int totalNodesExpanded = 0;
+        java.util.List<State> expandedOrder = new java.util.ArrayList<>();
 
         // ID : we will increase limit until solution found or no cutoff occurs
         for (int limit = 0;; limit++) {
@@ -100,11 +105,13 @@ public class GenericSearch {
             while (!frontier.isEmpty()) {
                 Node current = frontier.pop();
                 nodesExpandedThisIter++;
+                expandedOrder.add(current.state);
 
                 if (problem.isGoal(current.state)) {
                     totalNodesExpanded += nodesExpandedThisIter;
                     String plan = reconstructPlan(current);
-                    return new SearchResult(plan, current.pathCost, totalNodesExpanded);
+                    java.util.List<State> pathStates = reconstructPathStates(current);
+                    return new SearchResult(plan, current.pathCost, totalNodesExpanded, expandedOrder, pathStates);
                 }
 
                 // If at depth limit, we don't expand but mark a cutoff
@@ -131,7 +138,7 @@ public class GenericSearch {
             // If there was no cutoff at this depth, further increasing limit won't help (
             // Klawzed )
             if (!cutoffOccurred) {
-                return new SearchResult("", -1, totalNodesExpanded);
+                return new SearchResult("", -1, totalNodesExpanded, expandedOrder, new java.util.ArrayList<>());
             }
 
             // Else increase limit and continue
@@ -155,6 +162,7 @@ public class GenericSearch {
         bestCost.put(initial, 0);
 
         int nodesExpanded = 0;
+        java.util.List<State> expandedOrder = new java.util.ArrayList<>();
 
         while (!frontier.isEmpty()) {
             Node current = frontier.poll();
@@ -165,10 +173,12 @@ public class GenericSearch {
                 continue;
 
             nodesExpanded++;
+            expandedOrder.add(current.state);
 
             if (problem.isGoal(current.state)) {
                 String plan = reconstructPlan(current);
-                return new SearchResult(plan, current.pathCost, nodesExpanded);
+                java.util.List<State> pathStates = reconstructPathStates(current);
+                return new SearchResult(plan, current.pathCost, nodesExpanded, expandedOrder, pathStates);
             }
 
             for (String action : problem.actions(current.state)) {
@@ -184,7 +194,7 @@ public class GenericSearch {
             }
         }
 
-        return new SearchResult("", -1, nodesExpanded);
+        return new SearchResult("", -1, nodesExpanded, expandedOrder, new java.util.ArrayList<>());
     }
 
     // ------------------------------------------------------
@@ -207,6 +217,7 @@ public class GenericSearch {
     frontier.add(root);
 
     int nodesExpanded = 0;
+    java.util.List<State> expandedOrder = new java.util.ArrayList<>();
 
     // Debug: Initial state information
     System.out.println("Starting Greedy Search with initial state: " + root.state);
@@ -224,13 +235,15 @@ public class GenericSearch {
 
         closed.add(current.state);
         nodesExpanded++;
+        expandedOrder.add(current.state);
 
         if (problem.isGoal(current.state)) {
             String plan = reconstructPlan(current);
             // Debug: Goal state found, show plan
             System.out.println("Goal reached: " + current.state);
             System.out.println("Plan to goal: " + plan);
-            return new SearchResult(plan, current.pathCost, nodesExpanded);
+            java.util.List<State> pathStates = reconstructPathStates(current);
+            return new SearchResult(plan, current.pathCost, nodesExpanded, expandedOrder, pathStates);
         }
 
         for (String action : problem.actions(current.state)) {
@@ -249,7 +262,7 @@ public class GenericSearch {
     }
 
     // If we reach here, no solution found
-    return new SearchResult("", -1, nodesExpanded);
+    return new SearchResult("", -1, nodesExpanded, expandedOrder, new java.util.ArrayList<>());
 }
 
 // ------------------------------------------------------
@@ -272,6 +285,7 @@ public static SearchResult AStar(SearchProblem problem, int heuristicId) {
     frontier.add(root);
 
     int nodesExpanded = 0;
+    java.util.List<State> expandedOrder = new java.util.ArrayList<>();
 
     // Debug: Initial state information
     System.out.println("Starting A* Search with initial state: " + root.state);
@@ -290,13 +304,15 @@ public static SearchResult AStar(SearchProblem problem, int heuristicId) {
             continue;
 
         nodesExpanded++;
+        expandedOrder.add(current.state);
 
         if (problem.isGoal(current.state)) {
             String plan = reconstructPlan(current);
             // Debug: Goal state found, show plan
             System.out.println("Goal reached: " + current.state);
             System.out.println("Plan to goal: " + plan);
-            return new SearchResult(plan, current.pathCost, nodesExpanded);
+            java.util.List<State> pathStates = reconstructPathStates(current);
+            return new SearchResult(plan, current.pathCost, nodesExpanded, expandedOrder, pathStates);
         }
 
         for (String action : problem.actions(current.state)) {
@@ -318,7 +334,7 @@ public static SearchResult AStar(SearchProblem problem, int heuristicId) {
     }
 
     // If we reach here, no solution found
-    return new SearchResult("", -1, nodesExpanded);
+    return new SearchResult("", -1, nodesExpanded, expandedOrder, new java.util.ArrayList<>());
 }
 
     private static String reconstructPlan(Node node) {
@@ -329,6 +345,17 @@ public static SearchResult AStar(SearchProblem problem, int heuristicId) {
         }
         Collections.reverse(actions);
         return String.join(",", actions);
+    }
+
+    private static java.util.List<State> reconstructPathStates(Node node) {
+        java.util.List<State> states = new java.util.ArrayList<>();
+        Node cur = node;
+        while (cur != null) {
+            states.add(cur.state);
+            cur = cur.parent;
+        }
+        java.util.Collections.reverse(states);
+        return states;
     }
 
     // helper to check if a given state appears on the path from node to root

@@ -4,6 +4,9 @@ import java.util.*;
 
 public class DeliveryPlanner {
 
+    // single shared UI instance (so repeated plan() calls reuse same window)
+    private static UIVisualizer sharedUI = null;
+
     // ======================================================================
     // MAIN PLANNING FUNCTION  (ASSIGN + MULTI-DELIVERIES PER STORE)
     // ======================================================================
@@ -13,7 +16,18 @@ public class DeliveryPlanner {
         Grid grid = parseGrid(initialState, traffic);
 
         // 2) Optional UI
-        UIVisualizer ui = visualize ? new UIVisualizer(grid) : null;
+        // reuse a single visualizer to avoid opening multiple windows
+        UIVisualizer ui = null;
+        if (visualize) {
+            ui = sharedUI;
+            if (ui == null) {
+                ui = new UIVisualizer(grid);
+                sharedUI = ui;
+            } else {
+                // if we already have a shared UI, update its grid
+                ui.getPanel().setGrid(grid);
+            }
+        }
 
         StringBuilder output = new StringBuilder();
 
@@ -144,10 +158,7 @@ public class DeliveryPlanner {
 
     for (String step : steps) {
 
-        // Draw arrow BEFORE moving
-        ui.drawArrow(current, step.trim());
-
-        // Move truck
+        // Move truck (only animate the moving circle; don't render the action text)
         current = grid.applyAction(current, step.trim());
         ui.updateTruck(current);
     }
