@@ -35,7 +35,7 @@ public class GridPanel extends JPanel {
         switch (action) {
             case "up": arrows[s.y][s.x] = "↑"; break;
             case "down": arrows[s.y][s.x] = "↓"; break;
-            case "left": arrows[s.y][s.x] = "←"; break;
+            case "left": arrows[s.y][s.x] = "<-"; break;
             case "right": arrows[s.y][s.x] = "→"; break;
             case "tunnel": arrows[s.y][s.x] = "⟿"; break;
         }

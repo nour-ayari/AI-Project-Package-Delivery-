@@ -13,6 +13,9 @@ public class DeliverySearch implements SearchProblem {
         this.goal = goal;
         this.grid = grid;
     }
+        public State getGoal() { return goal; }
+    public Grid getGrid() { return grid; }
+
 
     // ---------------------------------------------------
     // SearchProblem implementation
@@ -54,9 +57,9 @@ public class DeliverySearch implements SearchProblem {
             case "BF": return GenericSearch.BFS(problem);
             case "DF": return GenericSearch.DFS(problem);
            // case "ID": return GenericSearch.ID(problem);
-           // case "UC": return GenericSearch.UCS(problem);
-         //   case "GR1": return GenericSearch.Greedy(problem, Heuristics.h1(goal));
-       //     case "GR2": return GenericSearch.Greedy(problem, Heuristics.h2(goal));
+           // case "UC": return GenericSearch.UCS(problem); 
+            case "G1" : return GenericSearch.Greedy (problem,1) ;
+            case "G2" : return GenericSearch.Greedy (problem,2)  ;
      //       case "AS1": return GenericSearch.AStar(problem, Heuristics.h1(goal));
    //         case "AS2": return GenericSearch.AStar(problem, Heuristics.h2(goal));
             default:

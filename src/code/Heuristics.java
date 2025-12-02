@@ -1,51 +1,45 @@
-
+// ------------------------------------------------------
+// HEURISTICS (h1 / h2) for DeliverySearch
+// ------------------------------------------------------
 package code;
+
 public class Heuristics {
-public static int manhattanDistance(State a, State b) {
+private static int manhattan(State a, State b) {
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
-    public static int compute(State n , State goal,Grid grid,int id , int minCost) {
-        minCost = grid.findMinCost(grid);
-        switch (id) {
-            case 1: return heuristic1(n,goal,grid,minCost);
-            case 2: return heuristic2(n,goal,grid);
-            default: return 0;
-        }
+/**
+ * heuristicId:
+ *  1 => h1 = Manhattan(s, goal)
+ *  2 => h2 = Tunnel-aware lower bound:
+ *        min(
+ *            d(s,goal),
+ *            min over tunnels: d(s,A)+d(A,B)+d(B,goal), d(s,B)+d(A,B)+d(A,goal)
+ *        )
+ */
+public static int heuristic(SearchProblem problem, State s, int heuristicId) {
+    if (!(problem instanceof DeliverySearch)) {
+        return 0;
     }
 
-    // --------------------------------------------------
-    // Heuristic 1 : Manhattan × minCost
-    // --------------------------------------------------
-public static int heuristic1(State n, State goal, Grid grid, int minCost) {
-    int manhattan = manhattanDistance(n, goal);
+    DeliverySearch ds = (DeliverySearch) problem;
+    State goal = ds.getGoal();
+    Grid grid = ds.getGrid();
 
-    return manhattan * minCost;
-}
+    int direct = manhattan(s, goal);
+    if (heuristicId == 1) return direct;
 
-
-    // --------------------------------------------------
-    // Heuristic 2 : Tunnel-aware 
-    // --------------------------------------------------
-public static int heuristic2(State n, State goal, Grid grid) {
-
-        int best = manhattananDistance(s, goal);
+    int best = direct;
 
     for (Tunnel t : grid.tunnels) {
+        int tunnelCost = manhattan(t.A, t.B);
 
-         int toA = manhattanDistance(s, t.A);
-            int toB = manhattanDistance(s, t.B);
+        int viaAB = manhattan(s, t.A) + tunnelCost + manhattan(t.B, goal);
+        int viaBA = manhattan(s, t.B) + tunnelCost + manhattan(t.A, goal);
 
-            int fromAtoGoal =manhattananDistance(t.A, goal);
-            int fromBtoGoal =manhattananDistance(t.B, goal);
-
-            int viaA = toA + t.cost + fromAtoGoal;
-            int viaB = toB + t.cost + fromBtoGoal;
-
-
-            best = Math.min(best, Math.min(viaA, viaB));
+        best = Math.min(best, Math.min(viaAB, viaBA));
     }
 
     return best;
-    }
+}
 }
