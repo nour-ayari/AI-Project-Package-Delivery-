@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 public class RoadBlock {
     public State s;
     public String action;

@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 public class Tunnel {
     public State A;
     public State B;

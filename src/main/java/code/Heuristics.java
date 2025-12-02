@@ -1,8 +1,7 @@
 // ------------------------------------------------------
 // HEURISTICS (h1 / h2) for DeliverySearch
 // ------------------------------------------------------
-package code;
-
+package code ;
 public class Heuristics {
 private static int manhattan(State a, State b) {
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);

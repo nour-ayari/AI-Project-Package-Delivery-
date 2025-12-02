@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 public class Node {
     public State state;
     public Node parent;

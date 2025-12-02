@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 import java.util.List;
 
 public interface SearchProblem {

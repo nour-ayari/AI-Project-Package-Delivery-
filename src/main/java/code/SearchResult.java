@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 public class SearchResult {
     public String plan;       // ex: "right,down,down,left"
     public int cost;          // coût total

@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 public class State {
     public int x, y; // position dans la grille
 
@@ -15,6 +14,7 @@ public class State {
         return this.x == s.x && this.y == s.y;
     }
 
+    
     @Override
     public int hashCode() {
         return x * 31 + y;

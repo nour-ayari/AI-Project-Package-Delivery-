@@ -1,5 +1,4 @@
-package code;
-
+package code ;
 import javax.swing.*;
 
 public class UIVisualizer {
