@@ -33,8 +33,16 @@ public class VisualizerMain {
         traces.add(GenericSearch.ID_trace(problem, "IDS", Color.MAGENTA));
         traces.add(GenericSearch.UCS_trace(problem, "UCS", Color.GREEN.darker()));
 
-    // show visualization: slower, sequential playback so you can watch each algorithm in turn
-    GridRenderer.show(grid, new ArrayList<>(), traces, 400, true);
+        // User preference: do not render numbered colored circles for expanded nodes.
+        // Clear expandedOrder/frontier lists so only colored paths + legend are shown.
+        for (GridRenderer.ExecutionTrace t : traces) {
+            if (t.expandedOrder != null) t.expandedOrder.clear();
+            if (t.frontierSnapshot != null) t.frontierSnapshot.clear();
+            if (t.closedSet != null) t.closedSet.clear();
+        }
+
+        // show visualization: slower, sequential playback so you can watch each algorithm in turn
+        GridRenderer.show(grid, new ArrayList<>(), traces, 400, true);
     }
 
     // Duplicate of DeliveryPlanner.parseGrid (small helper) — keeps Visualizer independent

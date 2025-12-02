@@ -59,6 +59,8 @@ public class GridRenderer extends JPanel {
     // animation state: how many expanded nodes to show for each trace
     private final Map<String, Integer> animateStep = new HashMap<>();
     private javax.swing.Timer animator;
+    // visibility per trace (controlled by checkboxes)
+    private final Map<String, Boolean> traceVisible = new HashMap<>();
 
     public GridRenderer(Grid grid, java.util.List<Route> routes, java.util.List<ExecutionTrace> traces) {
         this.grid = grid;
@@ -70,7 +72,41 @@ public class GridRenderer extends JPanel {
 
         for (ExecutionTrace t : this.traces) {
             animateStep.put(t.name, 0);
+            traceVisible.put(t.name, true);
         }
+    }
+
+    /**
+     * Build a small control panel containing one checkbox per algorithm and global Select/Deselect buttons.
+     */
+    public JPanel createControlPanel() {
+        JPanel controls = new JPanel();
+        controls.setLayout(new FlowLayout(FlowLayout.LEFT));
+
+        java.util.List<JCheckBox> boxes = new ArrayList<>();
+        for (ExecutionTrace t : traces) {
+            JCheckBox cb = new JCheckBox(t.name, true);
+            cb.setForeground(t.color != null ? t.color.darker() : Color.BLACK);
+            cb.addItemListener(e -> {
+                traceVisible.put(t.name, cb.isSelected());
+                repaint();
+            });
+            boxes.add(cb);
+            controls.add(cb);
+        }
+
+        JButton selectAll = new JButton("Select All");
+        selectAll.addActionListener(e -> {
+            for (JCheckBox cb : boxes) { cb.setSelected(true); }
+        });
+        JButton deselectAll = new JButton("Deselect All");
+        deselectAll.addActionListener(e -> {
+            for (JCheckBox cb : boxes) { cb.setSelected(false); }
+        });
+        controls.add(selectAll);
+        controls.add(deselectAll);
+
+        return controls;
     }
 
     private Point toPixel(State p) {
@@ -154,6 +190,8 @@ public class GridRenderer extends JPanel {
 
         // draw expanded nodes (per trace) with semi-transparent colors and labels
         for (ExecutionTrace t : traces) {
+            boolean visible = traceVisible.getOrDefault(t.name, true);
+            if (!visible) continue;
             Color base = t.color != null ? t.color : Color.MAGENTA;
             Color fill = new Color(base.getRed(), base.getGreen(), base.getBlue(), 120);
             int steps = animateStep.getOrDefault(t.name, t.expandedOrder.size());
@@ -184,7 +222,21 @@ public class GridRenderer extends JPanel {
         }
 
         // draw routes (final planned routes)
-        for (Route r : routes) {
+        // If no explicit routes were provided, generate routes from traces' finalPath so
+        // we can show all algorithm paths together with their colors.
+        java.util.List<Route> displayRoutes = routes;
+        if ((displayRoutes == null || displayRoutes.isEmpty()) && traces != null) {
+            displayRoutes = new ArrayList<>();
+            for (ExecutionTrace t : traces) {
+                boolean visible = traceVisible.getOrDefault(t.name, true);
+                if (!visible) continue;
+                if (t.finalPath != null && t.finalPath.size() > 1) {
+                    displayRoutes.add(new Route(t.finalPath.get(0), t.finalPath.get(t.finalPath.size() - 1), t.finalPath, t.color != null ? t.color : Color.MAGENTA));
+                }
+            }
+        }
+
+        if (displayRoutes != null) for (Route r : displayRoutes) {
             g.setColor(r.color);
             g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             for (int i = 0; i + 1 < r.path.size(); i++) {
@@ -241,24 +293,37 @@ public class GridRenderer extends JPanel {
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         g.drawString("Algorithms execution summary:", x, y + 14);
 
+        // draw a legend: one colored square + algorithm name + cost + pathlen
         int lineY = y + 34;
         g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
-        for (ExecutionTrace t : traces) {
-            String solved = t.finalCost >= 0 ? String.format("cost=%d", t.finalCost) : "no-solution";
-            String line = String.format("%s: %s, nodesExpanded=%d, pathLen=%d", t.name, solved, t.nodesExpanded, t.finalPath.size());
-            g.setColor(t.color != null ? t.color : Color.MAGENTA);
-            g.fillRect(x, lineY - 12, 10, 10);
-            g.setColor(Color.BLACK);
-            g.drawString(line, x + 18, lineY - 2);
-            lineY += 20;
-        }
 
-        // choose best algorithm (lowest cost if solved, else by nodesExpanded)
-        ExecutionTrace best = pickBest(traces);
-        if (best != null) {
+        // gracefully handle null traces
+        java.util.List<ExecutionTrace> tlist = traces != null ? traces : new ArrayList<>();
+
+        // compute best algorithm (lowest cost among solved)
+        ExecutionTrace best = pickBest(tlist);
+
+        for (ExecutionTrace t : tlist) {
+            String solved = t.finalCost >= 0 ? String.format("cost=%d", t.finalCost) : "no-solution";
+            String line = String.format("%s — %s, nodes=%d, pathLen=%d", t.name, solved, t.nodesExpanded, t.finalPath != null ? t.finalPath.size() : 0);
+
+            // color swatch
+            Color sw = t.color != null ? t.color : Color.MAGENTA;
+            g.setColor(sw);
+            g.fillRect(x, lineY - 14, 18, 14);
             g.setColor(Color.BLACK);
-            g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-            g.drawString("Best: " + best.name + (best.finalCost >= 0 ? (" (cost=" + best.finalCost + ")") : ""), x + 360, y + 20);
+            g.drawRect(x, lineY - 14, 18, 14);
+
+            // text
+            if (best != null && t == best) {
+                g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+                g.drawString(line + "  <-- BEST", x + 24, lineY - 2);
+                g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+            } else {
+                g.drawString(line, x + 24, lineY - 2);
+            }
+
+            lineY += 20;
         }
     }
 
@@ -379,7 +444,10 @@ public class GridRenderer extends JPanel {
             JFrame f = new JFrame("Delivery Planner Visualization");
             f.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
             GridRenderer panel = new GridRenderer(grid, routes, traces);
-            f.setContentPane(new JScrollPane(panel));
+            JPanel main = new JPanel(new BorderLayout());
+            main.add(new JScrollPane(panel), BorderLayout.CENTER);
+            main.add(panel.createControlPanel(), BorderLayout.SOUTH);
+            f.setContentPane(main);
             f.pack();
             f.setLocationRelativeTo(null);
             f.setVisible(true);
@@ -395,7 +463,10 @@ public class GridRenderer extends JPanel {
             JFrame f = new JFrame("Delivery Planner Visualization");
             f.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
             GridRenderer panel = new GridRenderer(grid, routes, traces);
-            f.setContentPane(new JScrollPane(panel));
+            JPanel main = new JPanel(new BorderLayout());
+            main.add(new JScrollPane(panel), BorderLayout.CENTER);
+            main.add(panel.createControlPanel(), BorderLayout.SOUTH);
+            f.setContentPane(main);
             f.pack();
             f.setLocationRelativeTo(null);
             f.setVisible(true);
