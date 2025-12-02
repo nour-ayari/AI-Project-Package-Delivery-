@@ -17,19 +17,7 @@ public class UIVisualizer {
         JPanel controls = new JPanel();
         controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
 
-        // Store / Destination selectors
-        controls.add(new JLabel("Select store:"));
-        JComboBox<State> storeBox = new JComboBox<>();
-        for (State s : grid.stores) storeBox.addItem(s);
-        controls.add(storeBox);
-
-        controls.add(new JLabel("Select destination:"));
-        JComboBox<State> destBox = new JComboBox<>();
-        for (State d : grid.destinations) destBox.addItem(d);
-        controls.add(destBox);
-
-        controls.add(Box.createVerticalStrut(10));
-
+        // Algorithms list (compact legend with color square, name and metrics)
         controls.add(new JLabel("Algorithms:"));
 
         // algorithms and their colors
@@ -42,86 +30,62 @@ public class UIVisualizer {
         colorMap.put("AS1", Color.GREEN.darker());
         colorMap.put("AS2", Color.BLUE);
 
-    java.util.Map<String, JCheckBox> algoChecks = new java.util.HashMap<>();
+        java.util.Map<String, JCheckBox> algoChecks = new java.util.HashMap<>();
+        java.util.Map<String, JLabel> nodesLabelMap = new java.util.HashMap<>();
+        java.util.Map<String, JLabel> costLabelMap = new java.util.HashMap<>();
 
         for (String a : algos) {
-            JPanel row = new JPanel();
-            row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
-            JCheckBox cb = new JCheckBox(a);
+            JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+            // small color square
+            JPanel colorDot = new JPanel();
+            colorDot.setBackground(colorMap.get(a));
+            colorDot.setPreferredSize(new java.awt.Dimension(12,12));
+            row.add(colorDot);
+
+            // algorithm name
+            JLabel name = new JLabel(a);
+            name.setPreferredSize(new java.awt.Dimension(40, 16));
+            row.add(name);
+
+            // nodes / cost labels
+            JLabel nodesLbl = new JLabel("nodes: -"); nodesLbl.setPreferredSize(new java.awt.Dimension(80, 16));
+            JLabel costLbl = new JLabel("cost: -"); costLbl.setPreferredSize(new java.awt.Dimension(80, 16));
+            nodesLabelMap.put(a, nodesLbl);
+            costLabelMap.put(a, costLbl);
+            row.add(nodesLbl);
+            row.add(costLbl);
+
+            // checkbox to toggle final path visibility
+            JCheckBox cb = new JCheckBox("show");
             cb.setSelected(false);
-            algoChecks.put(a, cb);
-            // when checkbox toggled, show/hide the algorithm path overlay
             cb.addActionListener(ev -> panel.setPathVisible(a, cb.isSelected()));
+            algoChecks.put(a, cb);
             // set color on panel now so legend matches even before compute
             panel.setAlgoColor(a, colorMap.getOrDefault(a, Color.MAGENTA));
             row.add(cb);
-
-            JButton play = new JButton("Play");
-            // when play pressed, animate expansions for this algo
-            play.addActionListener(ev -> panel.animateExpansions(a));
-            row.add(Box.createHorizontalStrut(6));
-            row.add(play);
-
-            // legend color square
-            JPanel colorDot = new JPanel();
-            colorDot.setBackground(colorMap.get(a));
-            colorDot.setPreferredSize(new java.awt.Dimension(14,14));
-            row.add(Box.createHorizontalStrut(6));
-            row.add(colorDot);
 
             controls.add(row);
         }
 
     controls.add(Box.createVerticalStrut(8));
 
-    // --- Animation controls (select algorithm to control, play/pause/step, speed) ---
-    controls.add(new JLabel("Animation controls:"));
-    JPanel animPanel = new JPanel();
-    animPanel.setLayout(new BoxLayout(animPanel, BoxLayout.X_AXIS));
-    JComboBox<String> algoSelect = new JComboBox<>();
-    for (String a : algos) algoSelect.addItem(a);
-    animPanel.add(algoSelect);
-    animPanel.add(Box.createHorizontalStrut(6));
-    JButton playAll = new JButton("Play");
-    JButton pause = new JButton("Pause");
-    JButton stepBack = new JButton("<");
-    JButton stepFwd = new JButton(">");
-    animPanel.add(playAll); animPanel.add(Box.createHorizontalStrut(4)); animPanel.add(pause);
-    animPanel.add(Box.createHorizontalStrut(4)); animPanel.add(stepBack); animPanel.add(stepFwd);
-    animPanel.add(Box.createHorizontalStrut(6));
-    JSlider speed = new JSlider(20, 500, 80);
-    speed.setToolTipText("Animation delay ms");
-    speed.setPreferredSize(new java.awt.Dimension(120, 24));
-    animPanel.add(speed);
-    controls.add(animPanel);
-
-    JButton computeButton = new JButton("Compute selected");
+    JButton computeButton = new JButton("Compute");
     controls.add(Box.createVerticalStrut(6));
     controls.add(computeButton);
 
         // Action: compute searches for selected algorithms between chosen store & dest
         computeButton.addActionListener(e -> {
-            State store = (State) storeBox.getSelectedItem();
-            State dest = (State) destBox.getSelectedItem();
-            if (store == null || dest == null) return;
+            // No manual store/destination selection in this UI variant: use the first store and the first destination
+            if (grid.stores == null || grid.stores.isEmpty() || grid.destinations == null || grid.destinations.isEmpty()) return;
+            State store = grid.stores.get(0);
+            State dest = grid.destinations.get(0);
+
             // prepare a results collector to compute recommendation when all finish
             java.util.Map<String, SearchResult> results = new java.util.concurrent.ConcurrentHashMap<>();
-            java.util.concurrent.atomic.AtomicInteger remaining = new java.util.concurrent.atomic.AtomicInteger(0);
-
-            // count selected
-            for (String a : algos) if (algoChecks.get(a) != null && algoChecks.get(a).isSelected()) remaining.incrementAndGet();
-            if (remaining.get() == 0) return;
+            java.util.concurrent.atomic.AtomicInteger remaining = new java.util.concurrent.atomic.AtomicInteger(algos.length);
 
             for (String a : algos) {
-                JCheckBox cb = algoChecks.get(a);
-                if (cb == null || !cb.isSelected()) {
-                    panel.setAlgoPath(a, null);
-                    panel.setAlgoExpansions(a, null);
-                    continue;
-                }
-
                 final String strategy = a;
-                // run search in background to avoid freezing UI
                 new SwingWorker<SearchResult, Void>() {
                     @Override
                     protected SearchResult doInBackground() {
@@ -136,8 +100,15 @@ public class UIVisualizer {
                                 panel.setAlgoColor(strategy, colorMap.getOrDefault(strategy, Color.MAGENTA));
                                 panel.setAlgoPath(strategy, r.pathStates);
                                 panel.setAlgoExpansions(strategy, r.expandedOrder);
-                                panel.setPathVisible(strategy, true);
+                                // visibility follows the "show" checkbox if checked, otherwise hide by default
+                                JCheckBox cb = algoChecks.get(strategy);
+                                panel.setPathVisible(strategy, cb != null && cb.isSelected());
                                 results.put(strategy, r);
+                                // update metric labels if present
+                                JLabel nodesLbl = nodesLabelMap.get(strategy);
+                                JLabel costLbl = costLabelMap.get(strategy);
+                                if (nodesLbl != null) nodesLbl.setText("nodes: " + r.nodesExpanded);
+                                if (costLbl != null) costLbl.setText("cost: " + r.cost);
                             }
                         } catch (Exception ex) {
                             ex.printStackTrace();
@@ -158,43 +129,18 @@ public class UIVisualizer {
             }
         });
 
-        // compute a simple recommendation: prefer lowest cost, then fewest expansions
-        // wire animation controls
-        playAll.addActionListener(ev -> {
-            String a = (String) algoSelect.getSelectedItem();
-            if (a != null) {
-                panel.setAnimationDelay(speed.getValue());
-                panel.animateExpansions(a);
-            }
-        });
-        pause.addActionListener(ev -> panel.stopAnimation());
-        stepBack.addActionListener(ev -> {
-            String a = (String) algoSelect.getSelectedItem(); if (a != null) panel.stepExpansion(a, -1);
-        });
-        stepFwd.addActionListener(ev -> {
-            String a = (String) algoSelect.getSelectedItem(); if (a != null) panel.stepExpansion(a, +1);
-        });
-        speed.addChangeListener(ev -> panel.setAnimationDelay(speed.getValue()));
 
-        // --- Legend (colors + map symbols)
+        // compute a simple recommendation: prefer lowest cost, then fewest expansions
+
+        // map symbols legend (small)
         controls.add(Box.createVerticalStrut(8));
-        controls.add(new JLabel("Legend:"));
-        JPanel legend = new JPanel();
-        legend.setLayout(new BoxLayout(legend, BoxLayout.Y_AXIS));
-        for (String a : algos) {
-            JPanel lrow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-            JPanel col = new JPanel(); col.setBackground(colorMap.get(a)); col.setPreferredSize(new java.awt.Dimension(14,14));
-            lrow.add(col); lrow.add(new JLabel(a));
-            legend.add(lrow);
-        }
-        // map symbols
-    JPanel symRow = new JPanel(new FlowLayout(FlowLayout.LEFT,6,2));
-    JPanel storeSym = new JPanel(); storeSym.setBackground(new Color(28,115,185)); storeSym.setPreferredSize(new java.awt.Dimension(14,14)); symRow.add(storeSym); symRow.add(new JLabel("Store"));
-    JPanel destSym = new JPanel(); destSym.setBackground(new Color(220,20,60)); destSym.setPreferredSize(new java.awt.Dimension(14,14)); symRow.add(destSym); symRow.add(new JLabel("Customer"));
-    JPanel blockSym = new JPanel(); blockSym.setBackground(new Color(200,50,50)); blockSym.setPreferredSize(new java.awt.Dimension(14,14)); symRow.add(blockSym); symRow.add(new JLabel("Roadblock"));
-    JPanel tunSym = new JPanel(); tunSym.setBackground(new Color(80,160,90)); tunSym.setPreferredSize(new java.awt.Dimension(14,14)); symRow.add(tunSym); symRow.add(new JLabel("Tunnel"));
-        legend.add(symRow);
-        controls.add(legend);
+        controls.add(new JLabel("Map symbols:"));
+        JPanel symRow = new JPanel(new FlowLayout(FlowLayout.LEFT,6,2));
+        JPanel storeSym = new JPanel(); storeSym.setBackground(new Color(28,115,185)); storeSym.setPreferredSize(new java.awt.Dimension(12,12)); symRow.add(storeSym); symRow.add(new JLabel("Store"));
+        JPanel destSym = new JPanel(); destSym.setBackground(new Color(220,20,60)); destSym.setPreferredSize(new java.awt.Dimension(12,12)); symRow.add(destSym); symRow.add(new JLabel("Customer"));
+        JPanel blockSym = new JPanel(); blockSym.setBackground(new Color(200,50,50)); blockSym.setPreferredSize(new java.awt.Dimension(12,12)); symRow.add(blockSym); symRow.add(new JLabel("Roadblock"));
+        JPanel tunSym = new JPanel(); tunSym.setBackground(new Color(80,160,90)); tunSym.setPreferredSize(new java.awt.Dimension(12,12)); symRow.add(tunSym); symRow.add(new JLabel("Tunnel"));
+        controls.add(symRow);
 
         // put left grid and right controls in split pane
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panel, controls);
