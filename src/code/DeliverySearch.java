@@ -13,9 +13,14 @@ public class DeliverySearch implements SearchProblem {
         this.goal = goal;
         this.grid = grid;
     }
-        public State getGoal() { return goal; }
-    public Grid getGrid() { return grid; }
 
+    public State getGoal() {
+        return goal;
+    }
+
+    public Grid getGrid() {
+        return grid;
+    }
 
     // ---------------------------------------------------
     // SearchProblem implementation
@@ -54,14 +59,20 @@ public class DeliverySearch implements SearchProblem {
         DeliverySearch problem = new DeliverySearch(start, goal, grid);
 
         switch (strategy) {
-            case "BF": return GenericSearch.BFS(problem);
-            case "DF": return GenericSearch.DFS(problem);
-           // case "ID": return GenericSearch.ID(problem);
-           // case "UC": return GenericSearch.UCS(problem); 
-            case "G1" : return GenericSearch.Greedy (problem,1) ;
-            case "G2" : return GenericSearch.Greedy (problem,2)  ;
-     //       case "AS1": return GenericSearch.AStar(problem, Heuristics.h1(goal));
-   //         case "AS2": return GenericSearch.AStar(problem, Heuristics.h2(goal));
+            case "BF":
+                return GenericSearch.BFS(problem);
+            case "DF":
+                return GenericSearch.DFS(problem);
+            // case "ID": return GenericSearch.ID(problem);
+            // case "UC": return GenericSearch.UCS(problem);
+            case "G1":
+                return GenericSearch.Greedy(problem, 1);
+            case "G2":
+                return GenericSearch.Greedy(problem, 2);
+            case "AS1":
+                return GenericSearch.AStar(problem, 1);
+            case "AS2":
+                return GenericSearch.AStar(problem, 2);
             default:
                 System.out.println("Unknown strategy " + strategy);
                 return null;

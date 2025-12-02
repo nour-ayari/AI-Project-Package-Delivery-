@@ -253,13 +253,74 @@ public class GenericSearch {
     return new SearchResult("", -1, nodesExpanded);
 }
 
-    // ------------------------------------------------------
-    // A* SEARCH — à compléter
-    // ------------------------------------------------------
-    public static SearchResult AStar(SearchProblem problem, int heuristicId) {
-        // TODO: implement later
-        return null;
+// ------------------------------------------------------
+// A* SEARCH — Uses both g(n) and h(n)
+// ------------------------------------------------------
+public static SearchResult AStar(SearchProblem problem, int heuristicId) {
+
+    State initial = problem.initialState();
+    Node root = new Node(initial, null, null, 0, 0);
+
+    // PriorityQueue ordered by f(n) = g(n) + h(n)
+    PriorityQueue<Node> frontier = new PriorityQueue<>(
+            Comparator.comparingInt(n -> n.pathCost + Heuristics.heuristic(problem, n.state, heuristicId))
+    );
+
+    // Best cost found so far for each state (g(n))
+    Map<State, Integer> bestG = new HashMap<>();
+    bestG.put(initial, 0);
+
+    frontier.add(root);
+
+    int nodesExpanded = 0;
+
+    // Debug: Initial state information
+    System.out.println("Starting A* Search with initial state: " + root.state);
+
+    while (!frontier.isEmpty()) {
+        Node current = frontier.poll();
+
+        // Debug: Show current node being processed and its f(n) = g(n) + h(n)
+        int fCurrent = current.pathCost + Heuristics.heuristic(problem, current.state, heuristicId);
+        System.out.println("Expanding Node: " + current.state + " | f(n) = " + fCurrent);
+        System.out.println("Heuristic for " + current.state + ": " + Heuristics.heuristic(problem, current.state, heuristicId));
+
+        // Skip if already expanded with a better g(n)
+        Integer recorded = bestG.get(current.state);
+        if (recorded != null && current.pathCost != recorded)
+            continue;
+
+        nodesExpanded++;
+
+        if (problem.isGoal(current.state)) {
+            String plan = reconstructPlan(current);
+            // Debug: Goal state found, show plan
+            System.out.println("Goal reached: " + current.state);
+            System.out.println("Plan to goal: " + plan);
+            return new SearchResult(plan, current.pathCost, nodesExpanded);
+        }
+
+        for (String action : problem.actions(current.state)) {
+            State next = problem.result(current.state, action);
+
+            // Debug: Log next state to be expanded
+            System.out.println("Next state from " + current.state + " with action " + action + ": " + next);
+
+            int newCost = current.pathCost + problem.stepCost(current.state, action, next);
+            Integer prevBest = bestG.get(next);
+
+            // If we find a better g(n), update and add the node to frontier
+            if (prevBest == null || newCost < prevBest) {
+                bestG.put(next, newCost);
+                Node child = new Node(next, current, action, newCost, current.depth + 1);
+                frontier.add(child);
+            }
+        }
     }
+
+    // If we reach here, no solution found
+    return new SearchResult("", -1, nodesExpanded);
+}
 
     private static String reconstructPlan(Node node) {
         List<String> actions = new ArrayList<>();
