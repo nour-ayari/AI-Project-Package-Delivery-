@@ -1,4 +1,5 @@
 package code;
+
 import java.util.*;
 
 public class DeliveryPlanner {
@@ -8,12 +9,20 @@ public class DeliveryPlanner {
     // ======================================================================
     public static String plan(String initialState, String traffic, String strategy, boolean visualize) {
 
-        // Parse Grid from strings
+        // 1) Parse Grid from strings
         Grid grid = parseGrid(initialState, traffic);
         // 2) Optional UI
         UIVisualizer ui = visualize ? new UIVisualizer(grid) : null;
 
         StringBuilder output = new StringBuilder();
+        if (visualize && ui != null) {
+            ui.log("Grid created: " + grid.rows + "x" + grid.cols +
+                    ", Stores=" + grid.stores.size() +
+                    ", Destinations=" + grid.destinations.size() +
+                    ", Tunnels=" + grid.tunnels.size());
+            ui.log("\nAlgorithm chosen: "+strategy+" Search");
+                }
+        
 
         // ==================================================================
         // PHASE 1 : ASSIGN EACH DESTINATION TO THE BEST STORE
@@ -38,6 +47,7 @@ public class DeliveryPlanner {
 
             if (bestStore != null) {
                 assignment.put(dest, bestStore);
+
             } else {
                 // no store can reach this destination
                 output.append("Destination ").append(dest)
@@ -50,8 +60,9 @@ public class DeliveryPlanner {
         // PHASE 2 : FOR EACH STORE, PLAN A FULL TOUR (Greedy)
         // ==================================================================
         for (State store : grid.stores) {
-
-            output.append("=== TRUCK AT STORE ").append(store).append(" ===\n");
+            output.append("------------------------------------ \n");
+            output.append("TRUCK AT STORE ").append(store).append(" \n");
+            output.append("------------------------------------ \n");
 
             // collect only destinations assigned to this store
             List<State> myDestinations = new ArrayList<>();
@@ -94,8 +105,8 @@ public class DeliveryPlanner {
                     break;
                 }
                 // Log the delivery
-                output.append("Deliver to ").append(bestDest)
-                        .append(" | plan=").append(bestResult.plan)
+                output.append("Delivers to :\n").append(bestDest)
+                        .append(" plan=").append(bestResult.plan)
                         .append(" | cost=").append(bestResult.cost)
                         .append(" | expanded=").append(bestResult.nodesExpanded)
                         .append("\n");
@@ -108,6 +119,7 @@ public class DeliveryPlanner {
             }
             output.append("\n");
         }
+        ui.log(output.toString());
         return output.toString();
     }
 
