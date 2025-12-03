@@ -1,5 +1,4 @@
 package code;
-
 import java.util.*;
 
 public class DeliveryPlanner {
@@ -9,7 +8,7 @@ public class DeliveryPlanner {
     // ======================================================================
     public static String plan(String initialState, String traffic, String strategy, boolean visualize) {
 
-        // 1) Parse Grid from strings
+        // Parse Grid from strings
         Grid grid = parseGrid(initialState, traffic);
         // 2) Optional UI
         UIVisualizer ui = visualize ? new UIVisualizer(grid) : null;
@@ -45,7 +44,6 @@ public class DeliveryPlanner {
                         .append(" is NOT reachable from any store.\n");
             }
         }
-
         output.append("\n");
 
         // ==================================================================
@@ -70,9 +68,7 @@ public class DeliveryPlanner {
             }
 
             State truckPos = store;
-
             while (!myDestinations.isEmpty()) {
-
                 State bestDest = null;
                 SearchResult bestResult = null;
 
@@ -97,32 +93,21 @@ public class DeliveryPlanner {
                             .append(store).append(".\n");
                     break;
                 }
-
-                // ---------------------------------------------------------
                 // Log the delivery
-                // ---------------------------------------------------------
                 output.append("Deliver to ").append(bestDest)
                         .append(" | plan=").append(bestResult.plan)
                         .append(" | cost=").append(bestResult.cost)
                         .append(" | expanded=").append(bestResult.nodesExpanded)
                         .append("\n");
-
-                // ---------------------------------------------------------
                 // Visualize the path if needed
-                // ---------------------------------------------------------
                 if (visualize) {
                     animatePlan(ui, grid, truckPos, bestResult.plan);
                 }
-
                 truckPos = store;
-
-                // Remove the delivered destination from this store's list
                 myDestinations.remove(bestDest);
             }
-
             output.append("\n");
         }
-
         return output.toString();
     }
 
@@ -130,19 +115,30 @@ public class DeliveryPlanner {
     // ANIMATE PLAN IN THE UI
     // ======================================================================
     private static void animatePlan(UIVisualizer ui, Grid grid, State start, String plan) {
+        if (plan == null || plan.isEmpty() || ui == null || grid == null)
+            return;
         State current = new State(start.x, start.y);
         ui.updateTruck(current);
-
-        if (plan == null || plan.isEmpty())
-            return;
-
         String[] steps = plan.split(",");
-        for (String step : steps) {
-
-            ui.drawArrow(current, step.trim());
-            current = grid.applyAction(current, step.trim());
+        for (String rawStep : steps) {
+            String step = rawStep.trim();
+            ui.drawArrow(current, step);
+            current = grid.applyAction(current, step);
             ui.updateTruck(current);
         }
+    }
+
+    private static List<State> parseStates(String data, int count) {
+        List<State> list = new ArrayList<>();
+        if (data != null && !data.isEmpty()) {
+            String[] tokens = data.split(",");
+            for (int i = 0; i < count; i++) {
+                int x = Integer.parseInt(tokens[2 * i]);
+                int y = Integer.parseInt(tokens[2 * i + 1]);
+                list.add(new State(x, y));
+            }
+        }
+        return list;
     }
 
     // ======================================================================
@@ -151,43 +147,18 @@ public class DeliveryPlanner {
     // m;n;P;S;DESTS;STORES;TUNNELS;
     // ======================================================================
     private static Grid parseGrid(String initialState, String trafficString) {
-
         String[] parts = initialState.split(";");
-
         int cols = Integer.parseInt(parts[0]);
         int rows = Integer.parseInt(parts[1]);
         int P = Integer.parseInt(parts[2]);
         int S = Integer.parseInt(parts[3]);
-
         Grid g = new Grid(rows, cols);
+        // DESTINATIONS
+        g.destinations = parseStates(parts[4], P);
+        // STORES
+        g.stores = parseStates(parts[5], S);
 
-        // -------------------------
-        // DESTINATIONS : parts[4]
-        // -------------------------
-        if (parts.length > 4 && !parts[4].isEmpty()) {
-            String[] custData = parts[4].split(",");
-            for (int i = 0; i < P; i++) {
-                int x = Integer.parseInt(custData[2 * i]);
-                int y = Integer.parseInt(custData[2 * i + 1]);
-                g.destinations.add(new State(x, y));
-            }
-        }
-
-        // -------------------------
-        // STORES : parts[5]
-        // -------------------------
-        if (parts.length > 5 && !parts[5].isEmpty()) {
-            String[] storeData = parts[5].split(",");
-            for (int i = 0; i < S; i++) {
-                int x = Integer.parseInt(storeData[2 * i]);
-                int y = Integer.parseInt(storeData[2 * i + 1]);
-                g.stores.add(new State(x, y));
-            }
-        }
-
-        // -------------------------
-        // TUNNELS : parts[6]
-        // -------------------------
+        // TUNNELS
         if (parts.length > 6 && !parts[6].isEmpty()) {
             String[] tunData = parts[6].split(",");
             for (int i = 0; i + 3 < tunData.length; i += 4) {
@@ -198,10 +169,7 @@ public class DeliveryPlanner {
                 g.tunnels.add(new Tunnel(new State(x1, y1), new State(x2, y2)));
             }
         }
-
-        // -------------------------
         // TRAFFIC
-        // -------------------------
         if (trafficString != null && !trafficString.isEmpty()) {
             String[] segs = trafficString.split(";");
             for (String seg : segs) {
