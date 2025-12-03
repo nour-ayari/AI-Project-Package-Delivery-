@@ -1,6 +1,3 @@
-code\UIVisualizer.class
-code\DeliveryPlanner.class
-code\GridPanel.class
 code\Node.class
 code\SearchProblem.class
 code\DeliverySearch.class
@@ -9,6 +6,5 @@ code\SearchResult.class
 code\RoadBlock.class
 code\State.class
 code\Heuristics.class
-code\Main.class
 code\Grid.class
 code\Tunnel.class
