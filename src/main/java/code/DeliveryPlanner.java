@@ -4,30 +4,15 @@ import java.util.*;
 
 public class DeliveryPlanner {
 
-    // single shared UI instance (so repeated plan() calls reuse same window)
-    private static UIVisualizer sharedUI = null;
-
     // ======================================================================
-    // MAIN PLANNING FUNCTION  (ASSIGN + MULTI-DELIVERIES PER STORE)
+    // MAIN PLANNING FUNCTION (ASSIGN + MULTI-DELIVERIES PER STORE)
     // ======================================================================
     public static String plan(String initialState, String traffic, String strategy, boolean visualize) {
 
         // 1) Parse Grid from strings
         Grid grid = parseGrid(initialState, traffic);
-
         // 2) Optional UI
-        // reuse a single visualizer to avoid opening multiple windows
-        UIVisualizer ui = null;
-        if (visualize) {
-            ui = sharedUI;
-            if (ui == null) {
-                ui = new UIVisualizer(grid);
-                sharedUI = ui;
-            } else {
-                // if we already have a shared UI, update its grid
-                ui.getPanel().setGrid(grid);
-            }
-        }
+        UIVisualizer ui = visualize ? new UIVisualizer(grid) : null;
 
         StringBuilder output = new StringBuilder();
 
@@ -57,7 +42,7 @@ public class DeliveryPlanner {
             } else {
                 // no store can reach this destination
                 output.append("Destination ").append(dest)
-                      .append(" is NOT reachable from any store.\n");
+                        .append(" is NOT reachable from any store.\n");
             }
         }
 
@@ -109,7 +94,7 @@ public class DeliveryPlanner {
 
                 if (bestDest == null) {
                     output.append("Some assigned destinations are NOT reachable from store ")
-                          .append(store).append(".\n");
+                            .append(store).append(".\n");
                     break;
                 }
 
@@ -117,10 +102,10 @@ public class DeliveryPlanner {
                 // Log the delivery
                 // ---------------------------------------------------------
                 output.append("Deliver to ").append(bestDest)
-                      .append(" | plan=").append(bestResult.plan)
-                      .append(" | cost=").append(bestResult.cost)
-                      .append(" | expanded=").append(bestResult.nodesExpanded)
-                      .append("\n");
+                        .append(" | plan=").append(bestResult.plan)
+                        .append(" | cost=").append(bestResult.cost)
+                        .append(" | expanded=").append(bestResult.nodesExpanded)
+                        .append("\n");
 
                 // ---------------------------------------------------------
                 // Visualize the path if needed
@@ -129,7 +114,6 @@ public class DeliveryPlanner {
                     animatePlan(ui, grid, truckPos, bestResult.plan);
                 }
 
-                // Truck returns to store after each delivery (as per PDF)
                 truckPos = store;
 
                 // Remove the delivered destination from this store's list
@@ -142,29 +126,24 @@ public class DeliveryPlanner {
         return output.toString();
     }
 
-
     // ======================================================================
     // ANIMATE PLAN IN THE UI
     // ======================================================================
     private static void animatePlan(UIVisualizer ui, Grid grid, State start, String plan) {
-
-    State current = new State(start.x, start.y);
-    ui.updateTruck(current);
-
-    if (plan == null || plan.isEmpty())
-        return;
-
-    String[] steps = plan.split(",");
-
-    for (String step : steps) {
-
-        // Move truck (only animate the moving circle; don't render the action text)
-        current = grid.applyAction(current, step.trim());
+        State current = new State(start.x, start.y);
         ui.updateTruck(current);
+
+        if (plan == null || plan.isEmpty())
+            return;
+
+        String[] steps = plan.split(",");
+        for (String step : steps) {
+
+            ui.drawArrow(current, step.trim());
+            current = grid.applyAction(current, step.trim());
+            ui.updateTruck(current);
+        }
     }
-}
-
-
 
     // ======================================================================
     // PARSE GRID FROM STRINGS
@@ -226,7 +205,8 @@ public class DeliveryPlanner {
         if (trafficString != null && !trafficString.isEmpty()) {
             String[] segs = trafficString.split(";");
             for (String seg : segs) {
-                if (seg.isEmpty()) continue;
+                if (seg.isEmpty())
+                    continue;
 
                 String[] t = seg.split(",");
                 int sx = Integer.parseInt(t[0]);

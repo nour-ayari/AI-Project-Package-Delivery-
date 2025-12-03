@@ -1,37 +1,62 @@
 package code;
 
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
 public class Main {
+
     public static void main(String[] args) {
         // Generate grid and traffic data
         String generated = Grid.GenGrid();
-        System.out.println("=== INITIAL STATE ===");
-        System.out.println(generated);
-
         String[] parts = generated.split("\n");
         String init = parts[0];
         String traffic = parts[1];
 
-        System.out.println(init);
-        System.out.println(traffic);
+        // Create main frame
+        JFrame frame = new JFrame("Package Delivery Visualizer");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 200);
+        frame.setLayout(new BorderLayout());
 
-        // Test different strategies
-        System.out.println("\n=== Testing BFS ===");
-        DeliveryPlanner.plan(init, traffic, "BF", true); // BFS Strategy
+        // Panel for algorithm selection
+        JPanel selectionPanel = new JPanel();
+        selectionPanel.setLayout(new FlowLayout());
 
-        System.out.println("\n=== Testing DFS ===");
-        DeliveryPlanner.plan(init, traffic, "DF", true); // DFS Strategy
+        JLabel label = new JLabel("Select Algorithm: ");
+        String[] algorithms = { "BF", "DF", "UC", "ID", "G1", "G2", "A1", "A2" };
+        JComboBox<String> algoBox = new JComboBox<>(algorithms);
 
-        System.out.println("\n=== Testing Greedy Search (Manhattan) ===");
-        DeliveryPlanner.plan(init, traffic, "G1", true); // Greedy (Manhattan)
+        JButton startButton = new JButton("Start Visualization");
 
-        System.out.println("\n=== Testing Greedy Search (Tunnel-aware) ===");
-        DeliveryPlanner.plan(init, traffic, "G2", true); // Greedy (Tunnel-aware)
+        selectionPanel.add(label);
+        selectionPanel.add(algoBox);
+        selectionPanel.add(startButton);
 
-        System.out.println("\n=== Testing A* Search (Manhattan) ===");
-        DeliveryPlanner.plan(init, traffic, "AS1", true); // A* with Manhattan heuristic
+        frame.add(selectionPanel, BorderLayout.CENTER);
 
-        System.out.println("\n=== Testing A* Search (Tunnel-aware) ===");
-        DeliveryPlanner.plan(init, traffic, "AS2", true); // A* with Tunnel-aware heuristic
+        // Show frame
+        frame.setVisible(true);
 
+        // Action listener for start button
+        startButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String selectedAlgo = (String) algoBox.getSelectedItem();
+                System.out.println("Selected Algorithm: " + selectedAlgo);
+
+                // Close selection UI
+                frame.dispose();
+
+                new SwingWorker<Void, Void>() {
+                    @Override
+                    protected Void doInBackground() throws Exception {
+                        DeliveryPlanner.plan(init, traffic, selectedAlgo, true);
+                        return null;
+                    }
+                }.execute();
+            }
+        });
     }
 }
