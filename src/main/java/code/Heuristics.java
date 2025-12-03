@@ -1,44 +1,53 @@
-// ------------------------------------------------------
-// HEURISTICS (h1 / h2) for DeliverySearch
-// ------------------------------------------------------
-package code ;
+package code;
+
 public class Heuristics {
-private static int manhattan(State a, State b) {
-    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-}
 
-/**
- * heuristicId:
- *  1 => h1 = Manhattan(s, goal)
- *  2 => h2 = Tunnel-aware lower bound:
- *        min(
- *            d(s,goal),
- *            min over tunnels: d(s,A)+d(A,B)+d(B,goal), d(s,B)+d(A,B)+d(A,goal)
- *        )
- */
-public static int heuristic(SearchProblem problem, State s, int heuristicId) {
-    if (!(problem instanceof DeliverySearch)) {
-        return 0;
+    private static int manhattan(State a, State b) {
+        return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
     }
 
-    DeliverySearch ds = (DeliverySearch) problem;
-    State goal = ds.getGoal();
-    Grid grid = ds.getGrid();
+    /**
+     * Heuristic 1: Manhattan distance (admissible)
+     * Heuristic 2: Traffic-aware heuristic
+     * Combines Manhattan distance + traffic in the direction to goal
+     */   
+    public static int heuristic(SearchProblem problem, State s, int heuristicId) {
+        if (!(problem instanceof DeliverySearch)) return 0;
+        
+        DeliverySearch ds = (DeliverySearch) problem;
+        State goal = ds.getGoal();
+        Grid grid = ds.getGrid();
 
-    int direct = manhattan(s, goal);
-    if (heuristicId == 1) return direct;
+        if (heuristicId==1){
+        int direct = manhattan(s, goal);
 
-    int best = direct;
+            return direct;
+        } 
+        else{
 
-    for (Tunnel t : grid.tunnels) {
-        int tunnelCost = manhattan(t.A, t.B);
+        int x = s.x;
+        int y = s.y;
+        int cost = 0;
 
-        int viaAB = manhattan(s, t.A) + tunnelCost + manhattan(t.B, goal);
-        int viaBA = manhattan(s, t.B) + tunnelCost + manhattan(t.A, goal);
+        // Horizontal traffic
+        if (goal.x > x) {
+            cost += grid.traffic[y][x][3];   // RIGHT
+        } else if (goal.x < x) {
+            cost += grid.traffic[y][x][2];   // LEFT
+        }
 
-        best = Math.min(best, Math.min(viaAB, viaBA));
+        // Vertical traffic
+        if (goal.y > y) {
+            cost += grid.traffic[y][x][1];   // DOWN
+        } else if (goal.y < y) {
+            cost += grid.traffic[y][x][0];   // UP
+        }
+
+       //added Manhattan to keep admissible behavior
+        cost += manhattan(s, goal);
+
+        return cost;
+    
     }
-
-    return best;
 }
 }
