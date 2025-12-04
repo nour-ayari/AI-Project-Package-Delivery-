@@ -3,3 +3,62 @@ out/
 
 # Compiled class files
 *.class
+
+# Frontend/Angular specific ignores
+delivery-planner-ui/node_modules/
+delivery-planner-ui/.angular/
+delivery-planner-ui/dist/
+delivery-planner-ui/build/
+delivery-planner-ui/coverage/
+delivery-planner-ui/.cache/
+
+# Logs
+delivery-planner-ui/*.log
+delivery-planner-ui/npm-debug.log*
+delivery-planner-ui/yarn-debug.log*
+delivery-planner-ui/yarn-error.log*
+
+# IDEs and editors
+delivery-planner-ui/.vscode/
+delivery-planner-ui/.idea/
+delivery-planner-ui/*.swp
+delivery-planner-ui/*.swo
+delivery-planner-ui/*~
+
+# OS generated files
+delivery-planner-ui/.DS_Store
+delivery-planner-ui/.DS_Store?
+delivery-planner-ui/._*
+delivery-planner-ui/.Spotlight-V100
+delivery-planner-ui/.Trashes
+delivery-planner-ui/ehthumbs.db
+delivery-planner-ui/Thumbs.db
+
+# Environment files
+delivery-planner-ui/.env
+delivery-planner-ui/.env.local
+delivery-planner-ui/.env.development.local
+delivery-planner-ui/.env.test.local
+delivery-planner-ui/.env.production.local
+
+# Temporary folders
+delivery-planner-ui/tmp/
+delivery-planner-ui/temp/
+
+# Runtime data
+delivery-planner-ui/pids
+delivery-planner-ui/*.pid
+delivery-planner-ui/*.seed
+delivery-planner-ui/*.pid.lock
+
+# Optional npm cache directory
+delivery-planner-ui/.npm
+
+# Optional REPL history
+delivery-planner-ui/.node_repl_history
+
+# Output of 'npm pack'
+delivery-planner-ui/*.tgz
+
+# Yarn Integrity file
+delivery-planner-ui/.yarn-integrity
