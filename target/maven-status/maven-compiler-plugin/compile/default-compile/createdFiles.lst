@@ -5,7 +5,6 @@ code\GenericSearch.class
 code\SearchResult.class
 code\RoadBlock.class
 code\State.class
-code\UIVisualizer$1.class
 code\Heuristics.class
 code\Grid.class
 code\Tunnel.class

@@ -2,12 +2,11 @@ package code;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import java.util.*;
 
 public class BFSTest{
 
     @Test
-    public void BFSTest() {
+    public void BFSTest3x3() {
 
 
         // -----------------------------------------------------
@@ -46,31 +45,41 @@ public class BFSTest{
         // Le dernier état du chemin doit être le goal
         assertEquals(goal, result.pathStates.get(result.pathStates.size() - 1));
     }
+@Test
+public void testBFS_WithBlockedRoad() {
+    Grid g = new Grid(3, 3);
 
-    @Test
-    public void testBFS_WithBlockedRoad() {
-      Grid g = new Grid(3, 3);
+    // store → destination
+    State store = new State(0, 0);
+    State dest  = new State(2, 0);
 
-        // store → destination droite mais bloquée
-        State store = new State(0, 0);
-        State dest  = new State(2, 0);
+    g.stores.add(store);
+    g.destinations.add(dest);
 
-        // On bloque l’action "right" depuis (1,0)
-        g.blockedRoads.add(new RoadBlock(new State(1,0), "right"));
+    // traffic = 1 everywhere
+    for (int y = 0; y < 3; y++)
+        for (int x = 0; x < 3; x++)
+            for (int d = 0; d < 4; d++)
+                g.traffic[y][x][d] = 1;
 
-        DeliverySearch problem = new DeliverySearch(store, dest, g);
+    // ----- BLOCK A ROAD: (1,0) -> (2,0) -----
+    State from = new State(1, 0);
+    State to   = new State(2, 0);
+    g.blockedRoads.add(new RoadBlock(from, to)); // now edge-based
 
-        SearchResult result = GenericSearch.BFS(problem);
+    DeliverySearch problem = new DeliverySearch(store, dest, g);
 
-        assertNotNull(result);
-        assertTrue(result.cost >= 0);
+    SearchResult result = GenericSearch.BFS(problem);
 
-        // BFS doit contourner : descendre puis remonter
-        assertEquals(dest, result.pathStates.get(result.pathStates.size()-1));
+    assertNotNull(result);
+    assertTrue(result.cost >= 0);
 
-        System.out.println("PLAN = " + result.plan);
-        System.out.println("EXPANDED = " + result.expandedOrder);
-        System.out.println("PATH = " + result.pathStates);
-    }
-    
+    // BFS must avoid blocked road: go down, then right, then up
+    assertEquals(dest, result.pathStates.get(result.pathStates.size() - 1));
+
+    System.out.println("PLAN = " + result.plan);
+    System.out.println("EXPANDED = " + result.expandedOrder);
+    System.out.println("PATH = " + result.pathStates);
+}
+
 }
