@@ -25,7 +25,6 @@ public class GenericSearch {
                 java.util.List<State> pathStates = reconstructPathStates(current);
                 return new SearchResult(plan, current.pathCost, nodesExpanded, expandedOrder, pathStates);
             }
-
             for (String action : problem.actions(current.state)) {
                 State nextState = problem.result(current.state, action);
                 if (!visited.contains(nextState)) {
@@ -36,7 +35,6 @@ public class GenericSearch {
                 }
             }
         }
-
         return new SearchResult("", -1, nodesExpanded, expandedOrder, new java.util.ArrayList<>()); // no solution found
     }
 
