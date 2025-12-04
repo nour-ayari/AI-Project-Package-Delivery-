@@ -1,4 +1,5 @@
-package code ;
+package code;
+
 import java.util.*;
 
 public class DeliverySearch implements SearchProblem {
@@ -62,8 +63,10 @@ public class DeliverySearch implements SearchProblem {
                 return GenericSearch.BFS(problem);
             case "DF":
                 return GenericSearch.DFS(problem);
-            // case "ID": return GenericSearch.ID(problem);
-            // case "UC": return GenericSearch.UCS(problem);
+            case "UC":
+                return GenericSearch.UCS(problem);
+            case "ID":
+                return GenericSearch.ID(problem);
             case "G1":
                 return GenericSearch.Greedy(problem, 1);
             case "G2":
