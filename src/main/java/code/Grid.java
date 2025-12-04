@@ -27,62 +27,64 @@ public class Grid {
     public List<String> getPossibleActions(State s) {
         List<String> actions = new ArrayList<>();
 
-        // up
-        if (s.y > 0 && !isBlocked(s, "up"))
+        State up = new State(s.x, s.y - 1);
+        if (s.y > 0 && !isBlockedEdge(s, up) && traffic[s.y][s.x][0] > 0)
             actions.add("up");
-        // down
-        if (s.y < rows - 1 && !isBlocked(s, "down"))
+
+        State down = new State(s.x, s.y + 1);
+        if (s.y < rows - 1 && !isBlockedEdge(s, down) && traffic[s.y][s.x][1] > 0)
             actions.add("down");
-        // left
-        if (s.x > 0 && !isBlocked(s, "left"))
+
+        State left = new State(s.x - 1, s.y);
+        if (s.x > 0 && !isBlockedEdge(s, left) && traffic[s.y][s.x][2] > 0)
             actions.add("left");
-        // right
-        if (s.x < cols - 1 && !isBlocked(s, "right"))
+
+        State right = new State(s.x + 1, s.y);
+        if (s.x < cols - 1 && !isBlockedEdge(s, right) && traffic[s.y][s.x][3] > 0)
             actions.add("right");
 
-        // tunnel
         if (isTunnelEntrance(s))
             actions.add("tunnel");
 
         return actions;
     }
 
+    public int getCost(State s, State next, String action) {
+        // Blocked edge returns -1 cost (or Integer.MAX_VALUE)
+        if (action.equals("tunnel"))
+            return getTunnelCost(s);
+
+        if (isBlockedEdge(s, next))
+            return -1; // block completely
+
+        switch (action) {
+            case "up":
+                return traffic[s.y][s.x][0];
+            case "down":
+                return traffic[s.y][s.x][1];
+            case "left":
+                return traffic[s.y][s.x][2];
+            case "right":
+                return traffic[s.y][s.x][3];
+            default:
+                return 1;
+        }
+    }
+
     // ---------------------------------------
     // APPLY ACTIONS
     // ---------------------------------------
     public State applyAction(State s, String action) {
-        switch (action) {
-            case "up":
-                return new State(s.x, s.y - 1);
-            case "down":
-                return new State(s.x, s.y + 1);
-            case "left":
-                return new State(s.x - 1, s.y);
-            case "right":
-                return new State(s.x + 1, s.y);
-            case "tunnel":
-                return getTunnelExit(s);
-        }
-        return s;
-    }
+        State next = switch (action) {
+            case "up" -> new State(s.x, s.y - 1);
+            case "down" -> new State(s.x, s.y + 1);
+            case "left" -> new State(s.x - 1, s.y);
+            case "right" -> new State(s.x + 1, s.y);
+            case "tunnel" -> getTunnelExit(s);
+            default -> s;
+        };
 
-    // ---------------------------------------
-    // COSTS
-    // ---------------------------------------
-    public int getCost(State s, State next, String action) {
-        if (action.equals("tunnel"))
-            return getTunnelCost(s);
-
-        if (action.equals("up"))
-            return traffic[s.y][s.x][0];
-        if (action.equals("down"))
-            return traffic[s.y][s.x][1];
-        if (action.equals("left"))
-            return traffic[s.y][s.x][2];
-        if (action.equals("right"))
-            return traffic[s.y][s.x][3];
-
-        return 1; // default
+        return next;
     }
 
     // ---------------------------------------
@@ -122,8 +124,12 @@ public class Grid {
     // ---------------------------------------
     // BLOCKED ROADS
     // ---------------------------------------
-    public boolean isBlocked(State s, String action) {
-        return blockedRoads.contains(new RoadBlock(s, action));
+
+    public boolean isBlockedEdge(State s, State neighbor) {
+        // If neighbor is null or same as s, not blocked by an edge
+        if (neighbor == null || s.equals(neighbor))
+            return false;
+        return blockedRoads.contains(new RoadBlock(s, neighbor));
     }
 
     // Public random grid generator (keeps same API)
@@ -189,8 +195,31 @@ public class Grid {
             int y = rnd.nextInt(rows);
             int dir = rnd.nextInt(4);
 
-            g.blockedRoads.add(new RoadBlock(new State(x, y), dirName(dir)));
-            g.traffic[y][x][dir] = 0;
+            State from = new State(x, y);
+            State to = null;
+            switch (dir) {
+                case 0:
+                    if (y > 0)
+                        to = new State(x, y - 1);
+                    break; // up
+                case 1:
+                    if (y < rows - 1)
+                        to = new State(x, y + 1);
+                    break; // down
+                case 2:
+                    if (x > 0)
+                        to = new State(x - 1, y);
+                    break; // left
+                case 3:
+                    if (x < cols - 1)
+                        to = new State(x + 1, y);
+                    break; // right
+            }
+
+            if (to != null) {
+                g.blockedRoads.add(new RoadBlock(from, to));
+                g.traffic[y][x][dir] = 0;
+            }
         }
 
         // ----- SERIALIZATION -----
@@ -231,20 +260,5 @@ public class Grid {
         }
 
         return initial.toString() + "\n" + trafficSb.toString();
-    }
-
-    private static String dirName(int d) {
-        switch (d) {
-            case 0:
-                return "up";
-            case 1:
-                return "down";
-            case 2:
-                return "left";
-            case 3:
-                return "right";
-            default:
-                return "";
-        }
     }
 }
