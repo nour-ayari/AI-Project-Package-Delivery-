@@ -9,6 +9,7 @@ public class DFSTest {
     public void DFSTest3x3() {
         Grid g = new Grid(3, 3);
         State store = new State(0, 0);
+<<<<<<< HEAD
         State dest = new State(2, 2);
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
@@ -18,6 +19,9 @@ public class DFSTest {
                 g.traffic[y][x][3] = 1;
             }
         }
+=======
+        State dest  = new State(2, 0);
+>>>>>>> 90ad805 (changes)
 
         DeliverySearch problem = new DeliverySearch(store, dest, g);
         SearchResult result = GenericSearch.DFS(problem);
