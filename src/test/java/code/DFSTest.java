@@ -18,7 +18,6 @@ public class DFSTest {
                 g.traffic[y][x][3] = 1;
             }
         }
-
         DeliverySearch problem = new DeliverySearch(store, dest, g);
         SearchResult result = GenericSearch.DFS(problem);
 
