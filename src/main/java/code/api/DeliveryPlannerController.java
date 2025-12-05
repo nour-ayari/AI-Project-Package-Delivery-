@@ -1,7 +1,9 @@
 package code.api;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -38,11 +40,48 @@ public class DeliveryPlannerController {
                 strategy = "BFS"; // default
             }
             
-            // Solve for each store to each destination
+            // PHASE 1: Assign each destination to the store with the lowest cost
+            // destination -> store
+            Map<State, State> assignment = new HashMap<>();
+            
+            for (State dest : grid.destinations) {
+                int bestCost = Integer.MAX_VALUE;
+                State bestStore = null;
+                
+                for (State store : grid.stores) {
+                    SearchResult result = DeliverySearch.solve(store, dest, grid, strategy);
+                    
+                    if (result != null && result.cost >= 0 && result.cost < bestCost) {
+                        bestCost = result.cost;
+                        bestStore = store;
+                    }
+                }
+                
+                if (bestStore != null) {
+                    assignment.put(dest, bestStore);
+                    System.out.println("Assigned destination " + dest + " to store " + bestStore + " with cost " + bestCost);
+                }
+            }
+            
+            // PHASE 2: For each store, create routes to its assigned destinations
             List<PlanningResponse.DeliveryRoute> routes = new ArrayList<>();
             
             for (State store : grid.stores) {
+                System.out.println("Planning routes for store " + store);
+                
+                // Collect destinations assigned to this store
+                List<State> assignedDestinations = new ArrayList<>();
                 for (State dest : grid.destinations) {
+                    State assignedStore = assignment.get(dest);
+                    if (assignedStore != null && assignedStore.equals(store)) {
+                        assignedDestinations.add(dest);
+                    }
+                }
+                
+                System.out.println("Store " + store + " has " + assignedDestinations.size() + " assigned destinations");
+                
+                // Plan routes to assigned destinations
+                for (State dest : assignedDestinations) {
                     SearchResult result = DeliverySearch.solve(store, dest, grid, strategy);
                     
                     if (result != null && result.cost >= 0) {
@@ -59,6 +98,8 @@ public class DeliveryPlannerController {
                             result.cost
                         );
                         routes.add(route);
+                        
+                        System.out.println("Created route from " + store + " to " + dest + " with cost " + result.cost);
                     }
                 }
             }
@@ -122,10 +163,14 @@ public class DeliveryPlannerController {
         
         // Add roadblocks
         if (config.getRoadblocks() != null) {
+            System.out.println("DEBUG: Processing " + config.getRoadblocks().size() + " roadblocks");
             for (GridConfig.RoadBlockConfig rb : config.getRoadblocks()) {
                 State from = new State(rb.getFrom().getX(), rb.getFrom().getY());
-                grid.blockedRoads.add(new RoadBlock(from, rb.getDirection()));
+                RoadBlock roadblock = new RoadBlock(from, rb.getDirection());
+                grid.blockedRoads.add(roadblock);
+                System.out.println("DEBUG: Added roadblock: " + roadblock.s.x + "," + roadblock.s.y + " -> " + roadblock.action);
             }
+            System.out.println("DEBUG: Total roadblocks in grid: " + grid.blockedRoads.size());
         }
         
         return grid;

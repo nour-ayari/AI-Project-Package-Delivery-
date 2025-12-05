@@ -47,6 +47,7 @@ public class Grid {
         if (isTunnelEntrance(s))
             actions.add("tunnel");
 
+        System.out.println("DEBUG: Possible actions from " + s.x + "," + s.y + ": " + actions);
         return actions;
     }
 
@@ -124,7 +125,18 @@ public class Grid {
     // BLOCKED ROADS
     // ---------------------------------------
     public boolean isBlocked(State s, String action) {
-        return blockedRoads.contains(new RoadBlock(s, action));
+        RoadBlock testBlock = new RoadBlock(s, action);
+        System.out.println("DEBUG: isBlocked checking (" + s.x + "," + s.y + ") -> " + action);
+        System.out.println("DEBUG: blockedRoads list has " + blockedRoads.size() + " items");
+        for (RoadBlock rb : blockedRoads) {
+            System.out.println("  - RoadBlock: (" + rb.s.x + "," + rb.s.y + ") -> " + rb.action);
+            if (rb.equals(testBlock)) {
+                System.out.println("  MATCH FOUND!");
+            }
+        }
+        boolean blocked = blockedRoads.contains(testBlock);
+        System.out.println("DEBUG: Result = " + blocked);
+        return blocked;
     }
 
     // Public random grid generator (keeps same API)
