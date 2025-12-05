@@ -592,20 +592,44 @@ export class DeliveryPlannerComponent
 
   private drawRoadblocks(): void {
     this.ctx.fillStyle = "#F44336";
+    this.ctx.strokeStyle = "#F44336";
+    this.ctx.lineWidth = Math.max(4, this.cellSize / 8); // Wall thickness
 
     for (const rb of this.roadblocks) {
-      const centerX = rb.from.x * this.cellSize + this.cellSize / 2;
-      const centerY = rb.from.y * this.cellSize + this.cellSize / 2;
+      let fromX = rb.from.x * this.cellSize;
+      let fromY = rb.from.y * this.cellSize;
+      let toX = rb.from.x * this.cellSize;
+      let toY = rb.from.y * this.cellSize;
 
-      // Draw X mark
-      this.ctx.strokeStyle = "#F44336";
-      this.ctx.lineWidth = 4;
+      // Calculate target position based on direction
+      switch (rb.direction) {
+        case "right":
+          toX = (rb.from.x + 1) * this.cellSize;
+          break;
+        case "down":
+          toY = (rb.from.y + 1) * this.cellSize;
+          break;
+        case "left":
+          fromX = (rb.from.x - 1) * this.cellSize;
+          toX = rb.from.x * this.cellSize;
+          break;
+        case "up":
+          fromY = (rb.from.y - 1) * this.cellSize;
+          toY = rb.from.y * this.cellSize;
+          break;
+      }
+
+      // Draw wall between cells
       this.ctx.beginPath();
-      this.ctx.moveTo(centerX - 10, centerY - 10);
-      this.ctx.lineTo(centerX + 10, centerY + 10);
-      this.ctx.moveTo(centerX + 10, centerY - 10);
-      this.ctx.lineTo(centerX - 10, centerY + 10);
-      this.ctx.stroke();
+      if (rb.direction === "right" || rb.direction === "left") {
+        // Vertical wall
+        const wallX = rb.direction === "right" ? fromX + this.cellSize : fromX;
+        this.ctx.fillRect(wallX - this.ctx.lineWidth / 2, fromY, this.ctx.lineWidth, this.cellSize);
+      } else {
+        // Horizontal wall
+        const wallY = rb.direction === "down" ? fromY + this.cellSize : fromY;
+        this.ctx.fillRect(fromX, wallY - this.ctx.lineWidth / 2, this.cellSize, this.ctx.lineWidth);
+      }
     }
   }
 
