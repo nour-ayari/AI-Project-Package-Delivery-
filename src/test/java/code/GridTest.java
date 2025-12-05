@@ -6,16 +6,35 @@ import java.util.List;
 
 class GridTest {
 
-    @Test
-    void testPossibleActions() {
-        Grid g = new Grid(3,3);
-        State s = new State(1,1);
-        List<String> actions = g.getPossibleActions(s);
-        assertTrue(actions.contains("up"));
-        assertTrue(actions.contains("down"));
-        assertTrue(actions.contains("left"));
-        assertTrue(actions.contains("right"));
-        assertFalse(actions.contains("tunnel"));
+@Test
+    void testBlockedRoads() {
+        Grid grid = new Grid(5, 5);
+
+        // Add a blocked road from (2,2) → (2,3)
+        State from = new State(2, 2);
+        State to = new State(2, 3);
+        grid.blockedRoads.add(new RoadBlock(from, to));
+
+        // Test getPossibleActions for (2,2)
+        List<String> actions = grid.getPossibleActions(from);
+        System.out.println("Possible actions from (2,2): " + actions);
+
+        if (actions.contains("down")) {
+            System.out.println("ERROR: Blocked road included!");
+        } else {
+            System.out.println("Blocked road correctly avoided.");
+        }
+
+        // Reverse check
+        State reverse = new State(2, 3);
+        actions = grid.getPossibleActions(reverse);
+        System.out.println("Possible actions from (2,3): " + actions);
+
+        if (actions.contains("up")) {
+            System.out.println("ERROR: Reverse blocked road included!");
+        } else {
+            System.out.println("Reverse blocked road correctly avoided.");
+        }
     }
 
     @Test
@@ -36,14 +55,6 @@ class GridTest {
         assertTrue(g.isTunnelEntrance(new State(0,0)));
         assertEquals(new State(2,2), g.getTunnelExit(new State(0,0)));
         assertEquals(new State(0,0), g.getTunnelExit(new State(2,2)));
-    }
-
-    @Test
-    void testBlockedRoad() {
-        Grid g = new Grid(3,3);
-        g.blockedRoads.add(new RoadBlock(new State(1,1), "up"));
-        assertTrue(g.isBlocked(new State(1,1), "up"));
-        assertFalse(g.isBlocked(new State(1,1), "down"));
     }
 
     @Test

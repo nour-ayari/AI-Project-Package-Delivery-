@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="code.HeuristicsTest" time="0.011" tests="6" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="code.GenericSearchTest" time="0.077" tests="5" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="17"/>
     <property name="sun.cpu.isalist" value="amd64"/>
@@ -15,8 +15,9 @@
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="FR"/>
     <property name="sun.boot.library.path" value="C:\backup\Documents\openjdk-17_windows-x64_bin\jdk-17\bin"/>
-    <property name="sun.java.command" value="C:\Users\eya-pc\AppData\Local\Temp\surefire2204398439454632624\surefirebooter-20251204231235449_3.jar C:\Users\eya-pc\AppData\Local\Temp\surefire2204398439454632624 2025-12-04T23-12-35_118-jvmRun1 surefire-20251204231235449_1tmp surefire_0-20251204231235449_2tmp"/>
+    <property name="sun.java.command" value="C:\Users\eya-pc\AppData\Local\Temp\surefire10710096474023412256\surefirebooter-20251204234432294_3.jar C:\Users\eya-pc\AppData\Local\Temp\surefire10710096474023412256 2025-12-04T23-44-32_118-jvmRun1 surefire-20251204234432294_1tmp surefire_0-20251204234432294_2tmp"/>
     <property name="jdk.debug" value="release"/>
+    <property name="test" value="GenericSearchTest"/>
     <property name="surefire.test.class.path" value="C:\backup\Bureau\GL4\AI\AI-Project-Package-Delivery-\target\test-classes;C:\backup\Bureau\GL4\AI\AI-Project-Package-Delivery-\target\classes;C:\Users\eya-pc\.m2\repository\org\junit\jupiter\junit-jupiter\5.10.0\junit-jupiter-5.10.0.jar;C:\Users\eya-pc\.m2\repository\org\junit\jupiter\junit-jupiter-api\5.10.0\junit-jupiter-api-5.10.0.jar;C:\Users\eya-pc\.m2\repository\org\opentest4j\opentest4j\1.3.0\opentest4j-1.3.0.jar;C:\Users\eya-pc\.m2\repository\org\junit\platform\junit-platform-commons\1.10.0\junit-platform-commons-1.10.0.jar;C:\Users\eya-pc\.m2\repository\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;C:\Users\eya-pc\.m2\repository\org\junit\jupiter\junit-jupiter-params\5.10.0\junit-jupiter-params-5.10.0.jar;C:\Users\eya-pc\.m2\repository\org\junit\jupiter\junit-jupiter-engine\5.10.0\junit-jupiter-engine-5.10.0.jar;C:\Users\eya-pc\.m2\repository\org\junit\platform\junit-platform-engine\1.10.0\junit-platform-engine-1.10.0.jar;"/>
     <property name="sun.cpu.endian" value="little"/>
     <property name="user.home" value="C:\Users\eya-pc"/>
@@ -30,7 +31,7 @@
     <property name="line.separator" value="&#10;"/>
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
-    <property name="surefire.real.class.path" value="C:\Users\eya-pc\AppData\Local\Temp\surefire2204398439454632624\surefirebooter-20251204231235449_3.jar"/>
+    <property name="surefire.real.class.path" value="C:\Users\eya-pc\AppData\Local\Temp\surefire10710096474023412256\surefirebooter-20251204234432294_3.jar"/>
     <property name="user.script" value=""/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="17+35-2724"/>
@@ -56,10 +57,52 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="61.0"/>
   </properties>
-  <testcase name="testComplexGrid" classname="code.HeuristicsTest" time="0.001"/>
-  <testcase name="testTunnelAwareHeuristic" classname="code.HeuristicsTest" time="0.001"/>
-  <testcase name="testMultipleTunnels" classname="code.HeuristicsTest" time="0.001"/>
-  <testcase name="testMultipleStatesOneTunnel" classname="code.HeuristicsTest" time="0.001"/>
-  <testcase name="testManhattanHeuristic" classname="code.HeuristicsTest" time="0.0"/>
-  <testcase name="testStartEqualsGoal" classname="code.HeuristicsTest" time="0.001"/>
+  <testcase name="UCSTest3x3" classname="code.GenericSearchTest" time="0.039">
+    <system-out><![CDATA[=== GRID PREVIEW ===
+ .  .  . 
+ .  .  . 
+ .  .  . 
+====================
+UCS Plan = down,right,down,right
+Nodes Expanded = 9
+]]></system-out>
+  </testcase>
+  <testcase name="GreedyTest3x3" classname="code.GenericSearchTest" time="0.001">
+    <system-out><![CDATA[=== GRID PREVIEW ===
+ .  .  . 
+ .  .  . 
+ .  .  . 
+====================
+Greedy Plan = down,down,right,right
+]]></system-out>
+  </testcase>
+  <testcase name="IDTest3x3" classname="code.GenericSearchTest" time="0.002">
+    <system-out><![CDATA[=== GRID PREVIEW ===
+ .  .  . 
+ .  .  . 
+ .  .  . 
+====================
+ID Plan = right,right,down,down
+]]></system-out>
+  </testcase>
+  <testcase name="TestBlockedRoadUCS" classname="code.GenericSearchTest" time="0.007">
+    <system-out><![CDATA[=== GRID PREVIEW ===
+ .  .  . 
+ .  .  . 
+ .  .  . 
+Blocked roads:
+(1,1) -> (2,1)
+====================
+UCS with blocked road Plan = right,right,down,down
+]]></system-out>
+  </testcase>
+  <testcase name="AStarTest3x3" classname="code.GenericSearchTest" time="0.001">
+    <system-out><![CDATA[=== GRID PREVIEW ===
+ .  .  . 
+ .  .  . 
+ .  .  . 
+====================
+A* Plan = down,down,right,right
+]]></system-out>
+  </testcase>
 </testsuite>

@@ -8,13 +8,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * GridPanel handles drawing of the city grid, walls, edge costs, tunnels, stores, destinations,
+ * GridPanel handles drawing of the city grid, walls, edge costs, tunnels,
+ * stores, destinations,
  * and dynamic elements such as trucks, trails, and path arrows.
  */
 public class GridPanel extends JPanel {
 
-    private final Grid grid;              // Grid model
-    private State truck;                   // Current truck position
+    private final Grid grid; // Grid model
+    private State truck; // Current truck position
 
     private final List<State> truckTrail = new ArrayList<>();
     private String[][] arrows;
@@ -36,14 +37,13 @@ public class GridPanel extends JPanel {
             StoresColors.put(s, new Color(
                     (int) (Math.random() * 200 + 30),
                     (int) (Math.random() * 200 + 30),
-                    (int) (Math.random() * 200 + 30)
-            ));
+                    (int) (Math.random() * 200 + 30)));
         }
 
         setPreferredSize(new Dimension(900, 600));
     }
 
-    /** Move the truck to a new state, update trail, and repaint.*/
+    /** Move the truck to a new state, update trail, and repaint. */
     public void setTruck(State s) {
         this.truck = s;
         if (s != null) {
@@ -64,7 +64,8 @@ public class GridPanel extends JPanel {
      * Add an arrow label to a cell for path visualization.
      */
     public void addArrow(State s, String label) {
-        if (s == null) return;
+        if (s == null)
+            return;
 
         if (arrows == null) {
             arrows = new String[grid.rows][grid.cols];
@@ -120,11 +121,13 @@ public class GridPanel extends JPanel {
                 // Edge costs (right and up)
                 if (x + 1 < grid.cols) {
                     int cost = grid.getCost(s, new State(x + 1, y), "right");
-                    if (cost > 0) drawEdgeCost(g, s, new State(x + 1, y), cost, cellW, cellH, gx, gy);
+                    if (cost > 0)
+                        drawEdgeCost(g, s, new State(x + 1, y), cost, cellW, cellH, gx, gy);
                 }
                 if (y - 1 >= 0) {
                     int cost = grid.getCost(new State(x, y - 1), s, "down");
-                    if (cost > 0) drawEdgeCost(g, new State(x, y - 1), s, cost, cellW, cellH, gx, gy);
+                    if (cost > 0)
+                        drawEdgeCost(g, new State(x, y - 1), s, cost, cellW, cellH, gx, gy);
                 }
                 // Walls (all four directions)
                 g.setColor(Color.BLACK);
@@ -147,8 +150,10 @@ public class GridPanel extends JPanel {
         drawTruckTrail(g, cellW, cellH, gx, gy);
         drawTruck(g, cellW, cellH, gx, gy);
     }
-//-----------------------Private Helper Methods----------------------------------
-        /** Draw a cell */
+
+    // -----------------------Private Helper
+    // Methods----------------------------------
+    /** Draw a cell */
     private void drawCell(Graphics2D g, State s, int cellW, int cellH, int gx, int gy,
             Color fillColor, Color borderColor, String label) {
         int bx = gx + s.x * cellW;
@@ -173,17 +178,30 @@ public class GridPanel extends JPanel {
             g.drawString(label, tx, ty);
         }
     }
+
     /** Draws all walls for a given cell in four directions. */
     private void drawWallsForCell(Graphics2D g, State s, int cellW, int cellH, int gx, int gy) {
         int x = s.x, y = s.y;
-        if (x + 1 < grid.cols && grid.getCost(s, new State(x + 1, y), "right") == 0)
-            drawWall(g, s, new State(x + 1, y), cellW, cellH, gx, gy);
-        if (y + 1 < grid.rows && grid.getCost(s, new State(x, y + 1), "down") == 0)
-            drawWall(g, s, new State(x, y + 1), cellW, cellH, gx, gy);
-        if (x - 1 >= 0 && grid.getCost(new State(x - 1, y), s, "right") == 0)
-            drawWall(g, new State(x - 1, y), s, cellW, cellH, gx, gy);
-        if (y - 1 >= 0 && grid.getCost(new State(x, y - 1), s, "down") == 0)
-            drawWall(g, new State(x, y - 1), s, cellW, cellH, gx, gy);
+
+        // Right
+        State right = new State(x + 1, y);
+        if (x + 1 < grid.cols && grid.isBlockedEdge(s, right))
+            drawWall(g, s, right, cellW, cellH, gx, gy);
+
+        // Down
+        State down = new State(x, y + 1);
+        if (y + 1 < grid.rows && grid.isBlockedEdge(s, down))
+            drawWall(g, s, down, cellW, cellH, gx, gy);
+
+        // Left
+        State left = new State(x - 1, y);
+        if (x - 1 >= 0 && grid.isBlockedEdge(left, s))
+            drawWall(g, left, s, cellW, cellH, gx, gy);
+
+        // Up
+        State up = new State(x, y - 1);
+        if (y - 1 >= 0 && grid.isBlockedEdge(up, s))
+            drawWall(g, up, s, cellW, cellH, gx, gy);
     }
 
     /** Cost between two connected cells. */
@@ -204,14 +222,15 @@ public class GridPanel extends JPanel {
 
         if (from.x != to.x) {
             g.fillRect(Math.min(fx, tx) + cellW - wallThickness / 2, fy, wallThickness, cellH);
-        } else { 
+        } else {
             g.fillRect(fx, Math.min(fy, ty) + cellH - wallThickness / 2, cellW, wallThickness);
         }
     }
 
     /** Draws the truck trail. */
     private void drawTruckTrail(Graphics2D g, int cellW, int cellH, int gx, int gy) {
-        if (truckTrail.size() <= 1) return;
+        if (truckTrail.size() <= 1)
+            return;
         g.setColor(new Color(truckColor.getRed(), truckColor.getGreen(), truckColor.getBlue(), 200));
         g.setStroke(new BasicStroke(Math.max(12f, Math.min(cellW, cellH) / 3f),
                 BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
@@ -224,7 +243,8 @@ public class GridPanel extends JPanel {
 
     /** Draws the truck */
     private void drawTruck(Graphics2D g, int cellW, int cellH, int gx, int gy) {
-        if (truck == null) return;
+        if (truck == null)
+            return;
         int radius = Math.max(12, Math.min(cellW, cellH) / 4);
         int cx = cx(truck, cellW, gx) - radius / 2;
         int cy = cy(truck, cellH, gy) - radius / 2;
@@ -245,7 +265,7 @@ public class GridPanel extends JPanel {
         Stroke old = g.getStroke();
         g.setColor(new Color(46, 139, 87));
         g.setStroke(new BasicStroke(Math.max(2f, Math.min(cellW, cellH) / 12f),
-                BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{8f, 8f}, 0f));
+                BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[] { 8f, 8f }, 0f));
         g.drawLine(cxA, cyA, cxB, cyB);
         g.setStroke(old);
 
@@ -262,6 +282,7 @@ public class GridPanel extends JPanel {
         g.setColor(outline);
         g.drawOval(cxB - r, cyB - r, r * 2, r * 2);
     }
+
     // Utility
     private int cx(State s, int cellW, int gx) {
         return gx + s.x * cellW + cellW / 2;

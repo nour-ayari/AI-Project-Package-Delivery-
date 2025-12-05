@@ -20,9 +20,8 @@ public class DeliveryPlanner {
                     ", Stores=" + grid.stores.size() +
                     ", Destinations=" + grid.destinations.size() +
                     ", Tunnels=" + grid.tunnels.size());
-            ui.log("\nAlgorithm chosen: "+strategy+" Search");
-                }
-        
+            ui.log("\nAlgorithm chosen: " + strategy + " Search");
+        }
 
         // ==================================================================
         // PHASE 1 : ASSIGN EACH DESTINATION TO THE BEST STORE
@@ -195,14 +194,27 @@ public class DeliveryPlanner {
                 int dy = Integer.parseInt(t[3]);
                 int cost = Integer.parseInt(t[4]);
 
-                if (dx == sx && dy == sy - 1)
+                if (dx == sx && dy == sy - 1) {
                     g.traffic[sy][sx][0] = cost; // up
-                if (dx == sx && dy == sy + 1)
+                    if (cost == 0)
+                        g.blockedRoads.add(new RoadBlock(new State(sx, sy), new State(dx, dy)));
+    
+                }
+                if (dx == sx && dy == sy + 1) {
                     g.traffic[sy][sx][1] = cost; // down
-                if (dx == sx - 1 && dy == sy)
+                    if (cost == 0)
+                        g.blockedRoads.add(new RoadBlock(new State(sx, sy), new State(dx, dy)));
+                }
+                if (dx == sx - 1 && dy == sy) {
                     g.traffic[sy][sx][2] = cost; // left
-                if (dx == sx + 1 && dy == sy)
+                    if (cost == 0)
+                        g.blockedRoads.add(new RoadBlock(new State(sx, sy), new State(dx, dy)));
+                }
+                if (dx == sx + 1 && dy == sy) {
                     g.traffic[sy][sx][3] = cost; // right
+                    if (cost == 0)
+                        g.blockedRoads.add(new RoadBlock(new State(sx, sy), new State(dx, dy)));
+                }
             }
         }
 
