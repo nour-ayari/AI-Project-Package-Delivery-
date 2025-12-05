@@ -1,6 +1,9 @@
 package code;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Random;
+import java.util.Set;
 
 public class Grid {
 
@@ -109,10 +112,8 @@ public class Grid {
 
     public int getTunnelCost(State s) {
         for (Tunnel t : tunnels) {
-            if (t.A.equals(s))
-                return manhattan(t.A, t.B);
-            if (t.B.equals(s))
-                return manhattan(t.A, t.B);
+            if (t.A.equals(s) || t.B.equals(s))
+                return t.cost > 0 ? t.cost : manhattan(t.A, t.B);
         }
         return 0;
     }

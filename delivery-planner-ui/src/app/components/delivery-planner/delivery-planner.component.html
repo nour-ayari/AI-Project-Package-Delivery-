@@ -1,0 +1,280 @@
+<div class="container" [class.dark-theme]="isDarkTheme">
+  <div class="header">
+    <h1 class="title">AI Package Delivery Planner</h1>
+    <button
+      class="theme-toggle"
+      (click)="toggleTheme()"
+      [title]="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'"
+    >
+      <i class="theme-icon">{{ isDarkTheme ? "💡" : "🌙" }}</i>
+    </button>
+  </div>
+
+  <div class="error-container" *ngIf="error" [@shakeAnimation]>
+    <div class="error-message">{{ error }}</div>
+    <button class="close-btn" (click)="error = null">×</button>
+  </div>
+
+  <div class="grid-interface">
+    <div class="tools-panel">
+      <div class="tools-group">
+        <h3>Grid Size</h3>
+        <div class="grid-size-controls">
+          <div class="size-input-group">
+            <label for="gridRows">Rows:</label>
+            <input
+              type="number"
+              id="gridRows"
+              [(ngModel)]="gridRows"
+              (input)="onGridSizeChange()"
+              min="3"
+              max="20"
+              class="size-input"
+              title="Number of rows (3-20)"
+            />
+          </div>
+          <div class="size-input-group">
+            <label for="gridCols">Columns:</label>
+            <input
+              type="number"
+              id="gridCols"
+              [(ngModel)]="gridCols"
+              (input)="onGridSizeChange()"
+              min="3"
+              max="20"
+              class="size-input"
+              title="Number of columns (3-20)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="tools-group">
+        <h3>Grid Tools</h3>
+        <button
+          [class.active]="mode === 'move'"
+          (click)="setMode('move')"
+          title="Move the canvas"
+        >
+          <i class="tool-icon">↕</i> Move
+        </button>
+        <button
+          [class.active]="mode === 'add-store'"
+          (click)="setMode('add-store')"
+          title="Add a store (pickup location)"
+        >
+          <i class="tool-icon">🏪</i> Add Store
+        </button>
+        <button
+          [class.active]="mode === 'add-destination'"
+          (click)="setMode('add-destination')"
+          title="Add a destination (delivery location)"
+        >
+          <i class="tool-icon">📍</i> Add Destination
+        </button>
+        <button
+          [class.active]="mode === 'add-tunnel'"
+          (click)="setMode('add-tunnel')"
+          title="Add a tunnel (shortcut between two cells)"
+        >
+          <i class="tool-icon">🚇</i> Add Tunnel
+        </button>
+        <button
+          [class.active]="mode === 'add-roadblock'"
+          (click)="setMode('add-roadblock')"
+          title="Block a cell"
+        >
+          <i class="tool-icon">🚫</i> Add Roadblock
+        </button>
+        <button
+          [class.active]="mode === 'add-cost'"
+          (click)="setMode('add-cost')"
+          title="Set traffic costs on cells"
+        >
+          <i class="tool-icon">💰</i> Add Cost
+        </button>
+        <button
+          [class.active]="mode === 'generate-random'"
+          (click)="generateRandomGrid()"
+          title="Generate a random grid configuration"
+        >
+          <i class="tool-icon">🎲</i> Generate Random
+        </button>
+        <button
+          [class.active]="mode === 'delete'"
+          (click)="setMode('delete')"
+          title="Delete an item"
+        >
+          <i class="tool-icon">-</i> Delete
+        </button>
+      </div>
+
+      <div class="tools-group">
+        <h3>View Controls</h3>
+        <button (click)="resetView()" title="Reset zoom and pan">
+          <i class="tool-icon">⟲</i> Reset View
+        </button>
+        <button (click)="resetGrid()" title="Clear the grid">
+          <i class="tool-icon">🗑</i> Clear Grid
+        </button>
+      </div>
+
+      <div class="tools-group">
+        <h3>Strategy</h3>
+        <select [(ngModel)]="selectedStrategy" class="strategy-select">
+          <option *ngFor="let strategy of strategies" [value]="strategy">
+            {{ strategy }}
+          </option>
+        </select>
+      </div>
+
+      <div class="tools-group">
+        <h3>Export/Import</h3>
+        <button
+          (click)="exportGrid()"
+          title="Export the grid configuration to JSON"
+        >
+          <i class="tool-icon">📤</i> Export Grid
+        </button>
+        <div class="file-input-container">
+          <label for="importGrid" class="file-input-label">
+            <i class="tool-icon">📥</i> Import Grid
+          </label>
+          <input
+            type="file"
+            id="importGrid"
+            accept=".json"
+            (change)="importGrid($event)"
+            class="file-input"
+          />
+        </div>
+      </div>
+
+      <div class="tools-group">
+        <h3>Plan Delivery</h3>
+        <button
+          class="solve-btn"
+          (click)="planDelivery()"
+          [disabled]="
+            isLoading || stores.length === 0 || destinations.length === 0
+          "
+          title="Find optimal delivery routes"
+        >
+          Plan Routes
+        </button>
+
+        <div class="result" *ngIf="routes.length > 0" [@bounceAnimation]>
+          <span>Found {{ routes.length }} route(s)</span>
+          <div
+            *ngFor="let route of routes; let i = index"
+            class="route-info"
+            [class.active-route]="currentAnimatingRoute === i && isAnimating"
+            (click)="animateSpecificRoute(i)"
+            title="Click to animate this route"
+          >
+            <small>Route {{ i + 1 }}: Cost {{ route.cost }}</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="tools-group" *ngIf="routes.length > 0">
+        <h3>Animation Controls</h3>
+        <button
+          (click)="stopRouteAnimation()"
+          [disabled]="!isAnimating"
+          title="Stop the route animation"
+        >
+          <i class="tool-icon">⏹</i> Stop Animation
+        </button>
+        <button
+          (click)="startRouteAnimation()"
+          [disabled]="isAnimating"
+          title="Replay the route animation"
+        >
+          <i class="tool-icon">▶</i> Replay
+        </button>
+        <div class="animation-speed-control">
+          <label for="animationSpeed">Speed:</label>
+          <input
+            type="range"
+            id="animationSpeed"
+            [(ngModel)]="animationSpeed"
+            min="50"
+            max="1000"
+            step="50"
+            title="Animation speed in milliseconds"
+          />
+          <span>{{ animationSpeed }}ms</span>
+        </div>
+      </div>
+
+      <div class="loading-container" *ngIf="isLoading" [@fadeAnimation]>
+        <div class="spinner"></div>
+        <span>Planning routes...</span>
+      </div>
+    </div>
+
+    <div class="canvas-container">
+      <canvas #gridCanvas></canvas>
+      <div class="instructions" *ngIf="!showGrid" [@fadeAnimation]>
+        <p>Welcome to the AI Package Delivery Planner!</p>
+        <p>
+          Use the tools on the left to get started and build your delivery
+          network.
+        </p>
+      </div>
+      <div class="mode-indicator" *ngIf="showGrid" [@slideAnimation]>
+        Mode: {{ mode | titlecase }}
+        <span *ngIf="tunnelStart" class="connecting-indicator"
+          >Select tunnel exit at ({{ tunnelStart.x }},
+          {{ tunnelStart.y }})</span
+        >
+      </div>
+    </div>
+  </div>
+
+  <div class="legend" [@slideAnimation]>
+    <h3>Legend</h3>
+    <div class="legend-items">
+      <div class="legend-item">
+        <div class="legend-symbol store-symbol">S</div>
+        <span>Store (Pickup)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-symbol destination-symbol">D</div>
+        <span>Destination (Delivery)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-symbol tunnel-symbol">━━</div>
+        <span>Tunnel (Shortcut)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-symbol roadblock-symbol">✕</div>
+        <span>Roadblock</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-symbol path-symbol">━</div>
+        <span>Delivery Route</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tips-and-tricks">
+    <h3>Tips & Features</h3>
+    <ul>
+      <li>Use mouse wheel to zoom in and out</li>
+      <li>Drag the canvas to move around</li>
+      <li>Add stores (lavender circles with 'S') as pickup locations</li>
+      <li>Add destinations (red squares with 'D') as delivery points</li>
+      <li>Tunnels provide shortcuts between distant cells</li>
+      <li>Choose different search strategies: BFS, DFS, UCS, A*, or Greedy</li>
+      <li>Export your grid to save it, and import it later to continue</li>
+      <li>
+        <strong>How it works:</strong> The AI finds the optimal path from each
+        store to each destination using the selected search algorithm,
+        considering traffic costs and obstacles.
+      </li>
+    </ul>
+  </div>
+
+</div>

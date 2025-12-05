@@ -1,10 +1,10 @@
 code\Node.class
+code\State.class
 code\SearchProblem.class
 code\DeliverySearch.class
 code\GenericSearch.class
 code\SearchResult.class
 code\RoadBlock.class
-code\State.class
 code\Heuristics.class
 code\Grid.class
 code\Tunnel.class
