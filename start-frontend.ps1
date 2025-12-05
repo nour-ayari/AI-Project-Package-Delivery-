@@ -31,6 +31,7 @@ if (!(Test-Path "node_modules")) {
 
 # Start Angular development server
 Write-Host "Starting Angular development server on port 4200..." -ForegroundColor Cyan
+Write-Host "Backend API proxy configured for http://localhost:8080" -ForegroundColor Yellow
 Write-Host "Open http://localhost:4200 in your browser" -ForegroundColor Yellow
 npm start
 

@@ -165,9 +165,46 @@
 
         <div class="result" *ngIf="routes.length > 0" [@bounceAnimation]>
           <span>Found {{ routes.length }} route(s)</span>
-          <div *ngFor="let route of routes; let i = index" class="route-info">
+          <div
+            *ngFor="let route of routes; let i = index"
+            class="route-info"
+            [class.active-route]="currentAnimatingRoute === i && isAnimating"
+            (click)="animateSpecificRoute(i)"
+            title="Click to animate this route"
+          >
             <small>Route {{ i + 1 }}: Cost {{ route.cost }}</small>
           </div>
+        </div>
+      </div>
+
+      <div class="tools-group" *ngIf="routes.length > 0">
+        <h3>Animation Controls</h3>
+        <button
+          (click)="stopRouteAnimation()"
+          [disabled]="!isAnimating"
+          title="Stop the route animation"
+        >
+          <i class="tool-icon">⏹</i> Stop Animation
+        </button>
+        <button
+          (click)="startRouteAnimation()"
+          [disabled]="isAnimating"
+          title="Replay the route animation"
+        >
+          <i class="tool-icon">▶</i> Replay
+        </button>
+        <div class="animation-speed-control">
+          <label for="animationSpeed">Speed:</label>
+          <input
+            type="range"
+            id="animationSpeed"
+            [(ngModel)]="animationSpeed"
+            min="50"
+            max="1000"
+            step="50"
+            title="Animation speed in milliseconds"
+          />
+          <span>{{ animationSpeed }}ms</span>
         </div>
       </div>
 
@@ -240,7 +277,4 @@
     </ul>
   </div>
 
-  <div class="footer-title" [@fadeAnimation]>
-    AI Package Delivery Project - <span>GL 3</span> - INSAT - 2025
-  </div>
 </div>

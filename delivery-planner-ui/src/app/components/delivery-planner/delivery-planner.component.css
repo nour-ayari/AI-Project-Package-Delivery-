@@ -21,7 +21,6 @@ body {
   margin: 0;
   text-align: center;
   position: relative;
-  animation: slideInBounce 1s ease-out;
   flex: 1;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -260,6 +259,30 @@ button:disabled {
   border-color: var(--primary-color);
 }
 
+/* Animation controls */
+.animation-speed-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.animation-speed-control label {
+  font-size: 0.9rem;
+  color: var(--text-color);
+}
+
+.animation-speed-control input[type="range"] {
+  width: 100%;
+  cursor: pointer;
+}
+
+.animation-speed-control span {
+  font-size: 0.85rem;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
 .solve-btn:hover:not([disabled]) {
   transform: translateY(-3px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
@@ -420,6 +443,35 @@ canvas {
   margin-top: 5px;
   font-size: 0.85rem;
   font-weight: normal;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.route-info:hover {
+  background-color: var(--button-hover-bg);
+  transform: translateY(-1px);
+}
+
+.active-route {
+  background-color: #ffd700 !important;
+  color: #000 !important;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(255, 215, 0, 0.6);
+  }
+  100% {
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  }
 }
 
 /* Legend */

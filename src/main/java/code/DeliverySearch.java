@@ -1,6 +1,6 @@
 package code;
 
-import java.util.*;
+import java.util.List;
 
 public class DeliverySearch implements SearchProblem {
 
@@ -58,7 +58,10 @@ public class DeliverySearch implements SearchProblem {
 
         DeliverySearch problem = new DeliverySearch(start, goal, grid);
 
-        switch (strategy) {
+        // Normalize strategy name (support both short codes and full names)
+        String normalizedStrategy = normalizeStrategy(strategy);
+
+        switch (normalizedStrategy) {
             case "BF":
                 return GenericSearch.BFS(problem);
             case "DF":
@@ -80,4 +83,59 @@ public class DeliverySearch implements SearchProblem {
                 return null;
         }
     }
+
+    /**
+     * Normalize strategy names from Angular UI to backend codes
+     */
+    private static String normalizeStrategy(String strategy) {
+        if (strategy == null) {
+            return "BF"; // default
+        }
+        
+        // Convert to uppercase for case-insensitive matching
+        String upper = strategy.toUpperCase();
+        
+        // Map full names to short codes
+        switch (upper) {
+            case "BFS":
+            case "BREADTH-FIRST":
+            case "BF":
+                return "BF";
+            case "DFS":
+            case "DEPTH-FIRST":
+            case "DF":
+                return "DF";
+            case "UCS":
+            case "UNIFORM-COST":
+            case "UC":
+                return "UC";
+            case "ID":
+            case "ITERATIVE-DEEPENING":
+                return "ID";
+            case "GREEDY":
+            case "GREEDY1":
+            case "G1":
+                return "G1";
+            case "GREEDY2":
+            case "G2":
+                return "G2";
+            case "ASTAR":
+            case "A*":
+            case "A-STAR":
+            case "AS1":
+                return "AS1";
+            case "ASTAR2":
+            case "A*2":
+            case "AS2":
+                return "AS2";
+            default:
+                // If already in short form, return as-is
+                if (upper.matches("(BF|DF|UC|ID|G1|G2|AS1|AS2)")) {
+                    return upper;
+                }
+                System.out.println("Unknown strategy '" + strategy + "', defaulting to BFS");
+                return "BF";
+        }
+    }
 }
+

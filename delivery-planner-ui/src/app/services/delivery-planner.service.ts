@@ -45,7 +45,7 @@ export interface PlanningResponse {
   providedIn: "root",
 })
 export class DeliveryPlannerService {
-  private apiUrl = "http://localhost:8080/api/delivery"; // Backend URL
+  private apiUrl = "/api/delivery"; // Use relative URL with proxy
 
   constructor(private http: HttpClient) {}
 

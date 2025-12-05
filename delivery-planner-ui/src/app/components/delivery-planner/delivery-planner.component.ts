@@ -158,7 +158,14 @@ export class DeliveryPlannerComponent
   routes: DeliveryRoute[] = [];
   isLoading = false;
   error: string | null = null;
+
+  // Animation state
+  isAnimating = false;
   currentAnimatingRoute = 0;
+  currentAnimatingStep = 0;
+  truckPosition: Position | null = null;
+  animationSpeed = 200; // milliseconds per step
+  animationTimer: any = null;
 
   constructor(private deliveryService: DeliveryPlannerService) {}
 
@@ -442,6 +449,11 @@ export class DeliveryPlannerComponent
       this.drawTunnelStartIndicator();
     }
 
+    // Draw animated truck if animation is active
+    if (this.isAnimating && this.truckPosition) {
+      this.drawTruck();
+    }
+
     // Restore context
     this.ctx.restore();
   }
@@ -470,14 +482,14 @@ export class DeliveryPlannerComponent
   }
 
   private drawStores(): void {
-    this.ctx.fillStyle = "#B19CD9";
-    this.ctx.strokeStyle = "#8B7BB8";
-    this.ctx.lineWidth = 3;
-
     for (const store of this.stores) {
       const centerX = store.x * this.cellSize + this.cellSize / 2;
       const centerY = store.y * this.cellSize + this.cellSize / 2;
 
+      // Draw circle background
+      this.ctx.fillStyle = "#B19CD9";
+      this.ctx.strokeStyle = "#8B7BB8";
+      this.ctx.lineWidth = 3;
       this.ctx.beginPath();
       this.ctx.arc(centerX, centerY, this.cellSize * 0.3, 0, 2 * Math.PI);
       this.ctx.fill();
@@ -485,7 +497,7 @@ export class DeliveryPlannerComponent
 
       // Draw 'S' label
       this.ctx.fillStyle = "#FFFFFF";
-      this.ctx.font = `bold ${this.cellSize * 0.4}px Arial`;
+      this.ctx.font = `bold ${Math.max(12, this.cellSize * 0.4)}px Arial`;
       this.ctx.textAlign = "center";
       this.ctx.textBaseline = "middle";
       this.ctx.fillText("S", centerX, centerY);
@@ -493,14 +505,14 @@ export class DeliveryPlannerComponent
   }
 
   private drawDestinations(): void {
-    this.ctx.fillStyle = "#FF5722";
-    this.ctx.strokeStyle = "#D84315";
-    this.ctx.lineWidth = 3;
-
     for (const dest of this.destinations) {
       const centerX = dest.x * this.cellSize + this.cellSize / 2;
       const centerY = dest.y * this.cellSize + this.cellSize / 2;
 
+      // Draw square background
+      this.ctx.fillStyle = "#FF5722";
+      this.ctx.strokeStyle = "#D84315";
+      this.ctx.lineWidth = 3;
       this.ctx.beginPath();
       this.ctx.rect(
         centerX - this.cellSize * 0.3,
@@ -513,7 +525,7 @@ export class DeliveryPlannerComponent
 
       // Draw 'D' label
       this.ctx.fillStyle = "#FFFFFF";
-      this.ctx.font = `bold ${this.cellSize * 0.4}px Arial`;
+      this.ctx.font = `bold ${Math.max(12, this.cellSize * 0.4)}px Arial`;
       this.ctx.textAlign = "center";
       this.ctx.textBaseline = "middle";
       this.ctx.fillText("D", centerX, centerY);
@@ -613,41 +625,67 @@ export class DeliveryPlannerComponent
   }
 
   private drawRoutes(): void {
-    for (let i = 0; i < this.routes.length; i++) {
-      const route = this.routes[i];
-      if (!route.path || route.path.length === 0) continue;
-
-      // Different colors for different routes
-      const colors = ["#2196F3", "#FF9800", "#4CAF50", "#E91E63", "#00BCD4"];
-      this.ctx.strokeStyle = colors[i % colors.length];
-      this.ctx.lineWidth = 4;
-      this.ctx.lineCap = "round";
-      this.ctx.lineJoin = "round";
-
-      this.ctx.beginPath();
-      const firstPoint = route.path[0];
-      this.ctx.moveTo(
-        firstPoint.x * this.cellSize + this.cellSize / 2,
-        firstPoint.y * this.cellSize + this.cellSize / 2
-      );
-
-      for (let j = 1; j < route.path.length; j++) {
-        const point = route.path[j];
-        this.ctx.lineTo(
-          point.x * this.cellSize + this.cellSize / 2,
-          point.y * this.cellSize + this.cellSize / 2
-        );
-      }
-
-      this.ctx.stroke();
-
-      // Draw arrow at the end
-      if (route.path.length > 1) {
-        const lastPoint = route.path[route.path.length - 1];
-        const secondLastPoint = route.path[route.path.length - 2];
-        this.drawArrow(secondLastPoint, lastPoint, colors[i % colors.length]);
-      }
+    // Only draw routes during animation - show only the currently animating route
+    if (!this.isAnimating) {
+      return; // Don't draw any routes when not animating
     }
+
+    // Only draw the currently animating route
+    const routeIndex = this.currentAnimatingRoute;
+    if (routeIndex < 0 || routeIndex >= this.routes.length) {
+      return;
+    }
+
+    const route = this.routes[routeIndex];
+    if (!route.path || route.path.length === 0) return;
+
+    // Highlight the currently animating route with gold color
+    this.ctx.strokeStyle = "#FFD700"; // Gold color for active route
+    this.ctx.lineWidth = 6; // Thicker line for active route
+    this.ctx.shadowColor = "#FFD700";
+    this.ctx.shadowBlur = 10;
+    this.ctx.lineCap = "round";
+    this.ctx.lineJoin = "round";
+
+    this.ctx.beginPath();
+    const firstPoint = route.path[0];
+    this.ctx.moveTo(
+      firstPoint.x * this.cellSize + this.cellSize / 2,
+      firstPoint.y * this.cellSize + this.cellSize / 2
+    );
+
+    for (let j = 1; j < route.path.length; j++) {
+      const point = route.path[j];
+      this.ctx.lineTo(
+        point.x * this.cellSize + this.cellSize / 2,
+        point.y * this.cellSize + this.cellSize / 2
+      );
+    }
+
+    this.ctx.stroke();
+
+    // Draw arrow at the end
+    if (route.path.length > 1) {
+      const lastPoint = route.path[route.path.length - 1];
+      const secondLastPoint = route.path[route.path.length - 2];
+      this.drawArrow(secondLastPoint, lastPoint, "#FFD700");
+    }
+
+    // Reset shadow
+    this.ctx.shadowBlur = 0;
+  }
+
+  private drawTruck(): void {
+    if (!this.truckPosition) return;
+
+    const centerX = this.truckPosition.x * this.cellSize + this.cellSize / 2;
+    const centerY = this.truckPosition.y * this.cellSize + this.cellSize / 2;
+
+    // Draw truck as emoji
+    this.ctx.font = `${Math.max(20, this.cellSize * 0.6)}px Arial`;
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
+    this.ctx.fillText("🚚", centerX, centerY);
   }
 
   private drawArrow(from: Position, to: Position, color: string): void {
@@ -741,15 +779,26 @@ export class DeliveryPlannerComponent
   }
 
   async planDelivery(): Promise<void> {
+    console.log("=== Starting planDelivery ===");
+
     if (this.stores.length === 0) {
       this.error = "Please add at least one store";
+      console.error("No stores added");
       return;
     }
 
     if (this.destinations.length === 0) {
       this.error = "Please add at least one destination";
+      console.error("No destinations added");
       return;
     }
+
+    console.log(
+      `Stores: ${this.stores.length}, Destinations: ${this.destinations.length}`
+    );
+    console.log("Stores:", this.stores);
+    console.log("Destinations:", this.destinations);
+    console.log("Strategy:", this.selectedStrategy);
 
     this.isLoading = true;
     this.error = null;
@@ -766,20 +815,36 @@ export class DeliveryPlannerComponent
         roadblocks: this.roadblocks,
       };
 
+      console.log("Sending request to backend with config:", gridConfig);
+
       const response = await this.deliveryService
         .planDelivery(gridConfig, this.selectedStrategy)
         .toPromise();
 
+      console.log("Received response from backend:", response);
+
       if (response && response.success) {
         this.routes = response.routes || [];
+        console.log(`Found ${this.routes.length} routes`);
+
+        if (this.routes.length === 0) {
+          this.error = "No routes found. Check if destinations are reachable.";
+        } else {
+          // Start animating routes
+          this.startRouteAnimation();
+        }
       } else {
         this.error = response?.message || "Planning failed";
+        console.error("Planning failed:", response?.message);
       }
     } catch (err: any) {
       this.error = `Error: ${err.message || "Unknown error"}`;
       console.error("Planning error:", err);
+      console.error("Error details:", err.error);
+      console.error("Error status:", err.status);
     } finally {
       this.isLoading = false;
+      console.log("=== Finished planDelivery ===");
     }
   }
 
@@ -971,5 +1036,126 @@ export class DeliveryPlannerComponent
         }
       }
     }
+  }
+
+  // ======================================================================
+  // ROUTE ANIMATION (Similar to Swing UI)
+  // ======================================================================
+
+  startRouteAnimation(): void {
+    console.log("Starting route animation");
+    this.isAnimating = true;
+    this.currentAnimatingRoute = 0;
+    this.currentAnimatingStep = 0;
+    this.animateNextStep();
+  }
+
+  stopRouteAnimation(): void {
+    console.log("Stopping route animation");
+    this.isAnimating = false;
+    if (this.animationTimer) {
+      clearTimeout(this.animationTimer);
+      this.animationTimer = null;
+    }
+    this.truckPosition = null;
+    this.renderGrid();
+  }
+
+  animateNextStep(): void {
+    if (!this.isAnimating || this.routes.length === 0) {
+      return;
+    }
+
+    // Check if we're done with all routes
+    if (this.currentAnimatingRoute >= this.routes.length) {
+      console.log("Animation complete for all routes");
+      this.isAnimating = false;
+      this.truckPosition = null;
+      this.renderGrid();
+      return;
+    }
+
+    const currentRoute = this.routes[this.currentAnimatingRoute];
+
+    // Check if current route is complete
+    if (this.currentAnimatingStep >= currentRoute.path.length) {
+      console.log(
+        `Route ${this.currentAnimatingRoute + 1}/${this.routes.length} complete`
+      );
+
+      // Move to next route
+      this.currentAnimatingRoute++;
+      this.currentAnimatingStep = 0;
+
+      // Pause between routes
+      this.animationTimer = setTimeout(() => {
+        this.animateNextStep();
+      }, 1000); // 1 second pause between routes
+
+      return;
+    }
+
+    // Update truck position
+    this.truckPosition = currentRoute.path[this.currentAnimatingStep];
+    this.currentAnimatingStep++;
+
+    // Render with truck
+    this.renderGrid();
+
+    // Schedule next step
+    this.animationTimer = setTimeout(() => {
+      this.animateNextStep();
+    }, this.animationSpeed);
+  }
+
+  resetAnimation(): void {
+    this.stopRouteAnimation();
+    this.currentAnimatingRoute = 0;
+    this.currentAnimatingStep = 0;
+    this.truckPosition = null;
+  }
+
+  animateSpecificRoute(routeIndex: number): void {
+    console.log(`Starting animation for route ${routeIndex + 1}`);
+    this.stopRouteAnimation(); // Stop any current animation
+
+    if (routeIndex < 0 || routeIndex >= this.routes.length) {
+      console.error(`Invalid route index: ${routeIndex}`);
+      return;
+    }
+
+    this.isAnimating = true;
+    this.currentAnimatingRoute = routeIndex;
+    this.currentAnimatingStep = 0;
+    this.animateSingleRoute();
+  }
+
+  animateSingleRoute(): void {
+    if (!this.isAnimating || this.currentAnimatingRoute >= this.routes.length) {
+      return;
+    }
+
+    const currentRoute = this.routes[this.currentAnimatingRoute];
+
+    // Check if current route is complete
+    if (this.currentAnimatingStep >= currentRoute.path.length) {
+      console.log(`Route ${this.currentAnimatingRoute + 1} animation complete`);
+      this.isAnimating = false;
+      this.truckPosition = null;
+      this.renderGrid();
+      return;
+    }
+
+    // Update truck position
+    this.truckPosition = currentRoute.path[this.currentAnimatingStep];
+    this.currentAnimatingStep++;
+
+    // Render with truck
+    this.renderGrid();
+
+    // Schedule next step
+    this.animationTimer = setTimeout(() => {
+      this.animateSingleRoute();
+    }, this.animationSpeed);
   }
 }
