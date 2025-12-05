@@ -624,11 +624,21 @@ export class DeliveryPlannerComponent
       if (rb.direction === "right" || rb.direction === "left") {
         // Vertical wall
         const wallX = rb.direction === "right" ? fromX + this.cellSize : fromX;
-        this.ctx.fillRect(wallX - this.ctx.lineWidth / 2, fromY, this.ctx.lineWidth, this.cellSize);
+        this.ctx.fillRect(
+          wallX - this.ctx.lineWidth / 2,
+          fromY,
+          this.ctx.lineWidth,
+          this.cellSize
+        );
       } else {
         // Horizontal wall
         const wallY = rb.direction === "down" ? fromY + this.cellSize : fromY;
-        this.ctx.fillRect(fromX, wallY - this.ctx.lineWidth / 2, this.cellSize, this.ctx.lineWidth);
+        this.ctx.fillRect(
+          fromX,
+          wallY - this.ctx.lineWidth / 2,
+          this.cellSize,
+          this.ctx.lineWidth
+        );
       }
     }
   }
