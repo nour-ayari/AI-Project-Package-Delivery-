@@ -10,7 +10,6 @@ export interface Position {
 export interface TunnelConfig {
   start: Position;
   end: Position;
-  cost: number;
 }
 
 export interface RoadBlockConfig {
@@ -33,6 +32,7 @@ export interface DeliveryRoute {
   destination: Position;
   path: Position[];
   cost: number;
+  expanded: number;
 }
 
 export interface PlanningResponse {
@@ -53,8 +53,6 @@ export class DeliveryPlannerService {
     grid: GridConfig,
     strategy: string
   ): Observable<PlanningResponse> {
-    console.log("Planning delivery with strategy:", strategy);
-    console.log("Grid config:", grid);
     return this.http.post<PlanningResponse>(`${this.apiUrl}/plan`, {
       grid,
       strategy,

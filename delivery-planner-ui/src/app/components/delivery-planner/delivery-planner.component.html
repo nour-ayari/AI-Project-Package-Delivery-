@@ -10,9 +10,9 @@
     </button>
   </div>
 
-  <div class="error-container" *ngIf="error" [@shakeAnimation]>
-    <div class="error-message">{{ error }}</div>
-    <button class="close-btn" (click)="error = null">×</button>
+  <div class="error-container" *ngIf="gridState.error" [@shakeAnimation]>
+    <div class="error-message">{{ gridState.error }}</div>
+    <button class="close-btn" (click)="gridState.error = null">×</button>
   </div>
 
   <div class="grid-interface">
@@ -25,7 +25,7 @@
             <input
               type="number"
               id="gridRows"
-              [(ngModel)]="gridRows"
+              [(ngModel)]="gridState.gridRows"
               (input)="onGridSizeChange()"
               min="3"
               max="20"
@@ -38,7 +38,7 @@
             <input
               type="number"
               id="gridCols"
-              [(ngModel)]="gridCols"
+              [(ngModel)]="gridState.gridCols"
               (input)="onGridSizeChange()"
               min="3"
               max="20"
@@ -52,56 +52,171 @@
       <div class="tools-group">
         <h3>Grid Tools</h3>
         <button
-          [class.active]="mode === 'move'"
+          [class.active]="gridState.mode === 'move'"
           (click)="setMode('move')"
           title="Move the canvas"
         >
           <i class="tool-icon">↕</i> Move
         </button>
         <button
-          [class.active]="mode === 'add-store'"
+          [class.active]="gridState.mode === 'add-store'"
           (click)="setMode('add-store')"
-          title="Add a store (pickup location)"
+          [disabled]="gridState.stores.length >= 3"
+          [title]="
+            gridState.stores.length >= 3
+              ? 'Maximum 3 stores reached'
+              : 'Add a store (pickup location)'
+          "
         >
-          <i class="tool-icon">🏪</i> Add Store
+          <i class="tool-icon">🏪</i> Add Store ({{
+            gridState.stores.length
+          }}/3)
         </button>
         <button
-          [class.active]="mode === 'add-destination'"
+          [class.active]="gridState.mode === 'add-destination'"
           (click)="setMode('add-destination')"
-          title="Add a destination (delivery location)"
+          [disabled]="gridState.destinations.length >= 10"
+          [title]="
+            gridState.destinations.length >= 10
+              ? 'Maximum 10 destinations reached'
+              : 'Add a destination (delivery location)'
+          "
         >
-          <i class="tool-icon">📍</i> Add Destination
+          <i class="tool-icon">📍</i> Add Destination ({{
+            gridState.destinations.length
+          }}/10)
         </button>
         <button
-          [class.active]="mode === 'add-tunnel'"
+          [class.active]="gridState.mode === 'add-tunnel'"
           (click)="setMode('add-tunnel')"
           title="Add a tunnel (shortcut between two cells)"
         >
           <i class="tool-icon">🚇</i> Add Tunnel
         </button>
         <button
-          [class.active]="mode === 'add-roadblock'"
+          [class.active]="gridState.mode === 'add-roadblock'"
           (click)="setMode('add-roadblock')"
           title="Block a cell"
         >
           <i class="tool-icon">🚫</i> Add Roadblock
         </button>
         <button
-          [class.active]="mode === 'add-cost'"
+          [class.active]="gridState.mode === 'add-cost'"
           (click)="setMode('add-cost')"
-          title="Set traffic costs on cells"
+          title="Set traffic costs on edges (click between cells)"
         >
           <i class="tool-icon">💰</i> Add Cost
         </button>
+
+        <!-- Cost Editing Panel -->
+        <div
+          class="cost-editing-panel"
+          *ngIf="costEditing.isEditingCellCost || costEditing.isEditingEdgeCost"
+          [@slideInAnimation]
+        >
+          <div class="cost-editor">
+            <h4 *ngIf="costEditing.isEditingCellCost">
+              Edit Cell Costs - Cell ({{ costEditing.editingCellPosition?.x }},
+              {{ costEditing.editingCellPosition?.y }})
+            </h4>
+            <h4 *ngIf="costEditing.isEditingEdgeCost">
+              Edit Edge Cost -
+              {{ costEditing.editingEdgeDirection | titlecase }} from ({{
+                costEditing.editingEdgeFrom?.x
+              }}, {{ costEditing.editingEdgeFrom?.y }})
+            </h4>
+
+            <div class="cost-inputs" *ngIf="costEditing.isEditingCellCost">
+              <div class="cost-input-group">
+                <label>Up:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="costEditing.editingCellCosts[0]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+              <div class="cost-input-group">
+                <label>Down:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="costEditing.editingCellCosts[1]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+              <div class="cost-input-group">
+                <label>Left:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="costEditing.editingCellCosts[2]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+              <div class="cost-input-group">
+                <label>Right:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="costEditing.editingCellCosts[3]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+            </div>
+
+            <div class="cost-inputs" *ngIf="costEditing.isEditingEdgeCost">
+              <div class="cost-input-group">
+                <label
+                  >{{
+                    costEditing.editingEdgeDirection | titlecase
+                  }}
+                  Cost:</label
+                >
+                <input
+                  type="number"
+                  [(ngModel)]="costEditing.editingEdgeCost"
+                  min="1"
+                  max="4"
+                  class="cost-input"
+                />
+              </div>
+            </div>
+
+            <div class="cost-editor-actions">
+              <button
+                class="save-btn"
+                (click)="
+                  costEditing.isEditingCellCost
+                    ? saveCellCost()
+                    : saveEdgeCost()
+                "
+              >
+                <i class="tool-icon">✓</i> Save
+              </button>
+              <button
+                class="cancel-btn"
+                (click)="
+                  costEditing.isEditingCellCost
+                    ? cancelCellCostEdit()
+                    : cancelEdgeCostEdit()
+                "
+              >
+                <i class="tool-icon">✕</i> Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
         <button
-          [class.active]="mode === 'generate-random'"
+          [class.active]="gridState.mode === 'generate-random'"
           (click)="generateRandomGrid()"
           title="Generate a random grid configuration"
         >
           <i class="tool-icon">🎲</i> Generate Random
         </button>
         <button
-          [class.active]="mode === 'delete'"
+          [class.active]="gridState.mode === 'delete'"
           (click)="setMode('delete')"
           title="Delete an item"
         >
@@ -121,8 +236,15 @@
 
       <div class="tools-group">
         <h3>Strategy</h3>
-        <select [(ngModel)]="selectedStrategy" class="strategy-select">
-          <option *ngFor="let strategy of strategies" [value]="strategy">
+        <select
+          [(ngModel)]="gridState.selectedStrategy"
+          (ngModelChange)="onStrategyChange()"
+          class="strategy-select"
+        >
+          <option
+            *ngFor="let strategy of gridState.strategies"
+            [value]="strategy"
+          >
             {{ strategy }}
           </option>
         </select>
@@ -156,28 +278,51 @@
           class="solve-btn"
           (click)="planDelivery()"
           [disabled]="
-            isLoading || stores.length === 0 || destinations.length === 0
+            gridState.isLoading ||
+            gridState.stores.length === 0 ||
+            gridState.destinations.length === 0
           "
           title="Find optimal delivery routes"
         >
           Plan Routes
         </button>
 
-        <div class="result" *ngIf="routes.length > 0" [@bounceAnimation]>
-          <span>Found {{ routes.length }} route(s)</span>
+        <div
+          class="result"
+          *ngIf="resultsService.routes.length > 0"
+          [@bounceAnimation]
+        >
+          <span
+            >Found {{ getCurrentAlgorithmRoutes().length }} route(s) for
+            {{ gridState.selectedStrategy }}</span
+          >
           <div
-            *ngFor="let route of routes; let i = index"
+            *ngFor="let route of getCurrentAlgorithmRoutes(); let i = index"
             class="route-info"
-            [class.active-route]="currentAnimatingRoute === i && isAnimating"
-            (click)="animateSpecificRoute(i)"
+            [class.active-route]="isRouteActive(route) && isAnimating"
+            (click)="animateRouteForCurrentAlgorithm(i)"
             title="Click to animate this route"
           >
             <small>Route {{ i + 1 }}: Cost {{ route.cost }}</small>
           </div>
         </div>
+
+        <!-- Clear Results button -->
+        <div
+          class="result-controls"
+          *ngIf="resultsService.algorithmResults.size > 0"
+        >
+          <button
+            class="clear-results-btn"
+            (click)="clearResults()"
+            title="Clear all algorithm results"
+          >
+            <i class="tool-icon">🗑</i> Clear Results
+          </button>
+        </div>
       </div>
 
-      <div class="tools-group" *ngIf="routes.length > 0">
+      <div class="tools-group" *ngIf="resultsService.routes.length > 0">
         <h3>Animation Controls</h3>
         <button
           (click)="stopRouteAnimation()"
@@ -208,7 +353,11 @@
         </div>
       </div>
 
-      <div class="loading-container" *ngIf="isLoading" [@fadeAnimation]>
+      <div
+        class="loading-container"
+        *ngIf="gridState.isLoading"
+        [@fadeAnimation]
+      >
         <div class="spinner"></div>
         <span>Planning routes...</span>
       </div>
@@ -216,18 +365,18 @@
 
     <div class="canvas-container">
       <canvas #gridCanvas></canvas>
-      <div class="instructions" *ngIf="!showGrid" [@fadeAnimation]>
+      <div class="instructions" *ngIf="!gridState.showGrid" [@fadeAnimation]>
         <p>Welcome to the AI Package Delivery Planner!</p>
         <p>
           Use the tools on the left to get started and build your delivery
           network.
         </p>
       </div>
-      <div class="mode-indicator" *ngIf="showGrid" [@slideAnimation]>
-        Mode: {{ mode | titlecase }}
-        <span *ngIf="tunnelStart" class="connecting-indicator"
-          >Select tunnel exit at ({{ tunnelStart.x }},
-          {{ tunnelStart.y }})</span
+      <div class="mode-indicator" *ngIf="gridState.showGrid" [@slideAnimation]>
+        Mode: {{ gridState.mode | titlecase }}
+        <span *ngIf="gridState.tunnelStart" class="connecting-indicator"
+          >Select tunnel exit at ({{ gridState.tunnelStart.x }},
+          {{ gridState.tunnelStart.y }})</span
         >
       </div>
     </div>
@@ -256,6 +405,17 @@
         <div class="legend-symbol path-symbol">━</div>
         <span>Delivery Route</span>
       </div>
+      <div class="legend-item">
+        <div class="legend-symbol truck-symbol">🚚</div>
+        <span>Delivery Truck</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="detailed-results" [@slideAnimation]>
+    <h3>Detailed Delivery Results</h3>
+    <div class="results-content">
+      <pre>{{ resultsService.detailedResults }}</pre>
     </div>
   </div>
 
@@ -264,7 +424,7 @@
     <ul>
       <li>Use mouse wheel to zoom in and out</li>
       <li>Drag the canvas to move around</li>
-      <li>Add stores (lavender circles with 'S') as pickup locations</li>
+      <li>Add stores (purple circles with 'S') as pickup locations</li>
       <li>Add destinations (red squares with 'D') as delivery points</li>
       <li>Tunnels provide shortcuts between distant cells</li>
       <li>Choose different search strategies: BFS, DFS, UCS, A*, or Greedy</li>
@@ -276,5 +436,4 @@
       </li>
     </ul>
   </div>
-
 </div>
