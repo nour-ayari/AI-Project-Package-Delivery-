@@ -4,6 +4,9 @@ out/
 # Compiled class files
 *.class
 
+
+target/
+
 # Frontend/Angular specific ignores
 delivery-planner-ui/node_modules/
 delivery-planner-ui/.angular/
