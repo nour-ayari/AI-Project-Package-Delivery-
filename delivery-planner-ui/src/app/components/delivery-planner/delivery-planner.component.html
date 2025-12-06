@@ -61,16 +61,28 @@
         <button
           [class.active]="mode === 'add-store'"
           (click)="setMode('add-store')"
-          title="Add a store (pickup location)"
+          [disabled]="stores.length >= 3"
+          [title]="
+            stores.length >= 3
+              ? 'Maximum 3 stores reached'
+              : 'Add a store (pickup location)'
+          "
         >
-          <i class="tool-icon">🏪</i> Add Store
+          <i class="tool-icon">🏪</i> Add Store ({{ stores.length }}/3)
         </button>
         <button
           [class.active]="mode === 'add-destination'"
           (click)="setMode('add-destination')"
-          title="Add a destination (delivery location)"
+          [disabled]="destinations.length >= 10"
+          [title]="
+            destinations.length >= 10
+              ? 'Maximum 10 destinations reached'
+              : 'Add a destination (delivery location)'
+          "
         >
-          <i class="tool-icon">📍</i> Add Destination
+          <i class="tool-icon">📍</i> Add Destination ({{
+            destinations.length
+          }}/10)
         </button>
         <button
           [class.active]="mode === 'add-tunnel'"
@@ -89,7 +101,7 @@
         <button
           [class.active]="mode === 'add-cost'"
           (click)="setMode('add-cost')"
-          title="Set traffic costs on cells"
+          title="Set traffic costs on edges (click between cells)"
         >
           <i class="tool-icon">💰</i> Add Cost
         </button>
@@ -276,5 +288,4 @@
       </li>
     </ul>
   </div>
-
 </div>

@@ -126,16 +126,10 @@ public class Grid {
     // ---------------------------------------
     public boolean isBlocked(State s, String action) {
         RoadBlock testBlock = new RoadBlock(s, action);
-        System.out.println("DEBUG: isBlocked checking (" + s.x + "," + s.y + ") -> " + action);
-        System.out.println("DEBUG: blockedRoads list has " + blockedRoads.size() + " items");
-        for (RoadBlock rb : blockedRoads) {
-            System.out.println("  - RoadBlock: (" + rb.s.x + "," + rb.s.y + ") -> " + rb.action);
-            if (rb.equals(testBlock)) {
-                System.out.println("  MATCH FOUND!");
-            }
-        }
         boolean blocked = blockedRoads.contains(testBlock);
-        System.out.println("DEBUG: Result = " + blocked);
+        if (blocked) {
+            System.out.println("DEBUG: Road blocked at " + s.x + "," + s.y + " direction " + action);
+        }
         return blocked;
     }
 
