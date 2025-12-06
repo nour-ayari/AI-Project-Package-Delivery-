@@ -102,6 +102,22 @@ import { AnimationService } from "./services/animation.service";
         ),
       ]),
     ]),
+    trigger("slideInAnimation", [
+      transition(":enter", [
+        style({ transform: "translateY(-20px)", opacity: 0 }),
+        animate(
+          "300ms ease-out",
+          style({ transform: "translateY(0)", opacity: 1 })
+        ),
+      ]),
+      transition(":leave", [
+        style({ transform: "translateY(0)", opacity: 1 }),
+        animate(
+          "300ms ease-in",
+          style({ transform: "translateY(-20px)", opacity: 0 })
+        ),
+      ]),
+    ]),
   ],
 })
 export class DeliveryPlannerComponent
@@ -157,6 +173,16 @@ export class DeliveryPlannerComponent
 
   // Animation state
   truckPosition: Position | null = null;
+
+  // Cost editing state
+  isEditingCellCost = false;
+  editingCellPosition: Position | null = null;
+  editingCellCosts = [1, 1, 1, 1]; // [up, down, left, right]
+
+  isEditingEdgeCost = false;
+  editingEdgeFrom: Position | null = null;
+  editingEdgeDirection = "";
+  editingEdgeCost = 1;
 
   constructor(
     private deliveryService: DeliveryPlannerService,
@@ -369,11 +395,17 @@ export class DeliveryPlannerComponent
             from: wallInfo.from,
             direction: wallInfo.direction,
           });
-          // Set traffic cost to 0 for blocked direction
+          // IMPORTANT: Set traffic cost to 0 for blocked direction
           const dirIndex = ["up", "down", "left", "right"].indexOf(
             wallInfo.direction
           );
-          this.trafficCosts[wallInfo.from.y][wallInfo.from.x][dirIndex] = 0;
+          if (
+            dirIndex >= 0 &&
+            this.trafficCosts[wallInfo.from.y] &&
+            this.trafficCosts[wallInfo.from.y][wallInfo.from.x]
+          ) {
+            this.trafficCosts[wallInfo.from.y][wallInfo.from.x][dirIndex] = 0;
+          }
         }
       }
       this.renderGrid();
@@ -381,6 +413,13 @@ export class DeliveryPlannerComponent
     }
 
     if (this.mode === "delete") {
+      const deletedRoadblocks = this.roadblocks.filter(
+        (rb) => rb.from.x === pos.x && rb.from.y === pos.y
+      );
+      console.log(
+        `Deleting ${deletedRoadblocks.length} roadblocks at (${pos.x},${pos.y})`
+      );
+
       const result = this.gridInteraction.deleteAtPosition(
         pos,
         this.stores,
@@ -392,6 +431,18 @@ export class DeliveryPlannerComponent
       this.destinations = result.destinations;
       this.tunnels = result.tunnels;
       this.roadblocks = result.roadblocks;
+
+      // Reset traffic costs to 1 for deleted roadblocks
+      deletedRoadblocks.forEach((rb) => {
+        const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+        if (
+          dirIndex >= 0 &&
+          this.trafficCosts[rb.from.y] &&
+          this.trafficCosts[rb.from.y][rb.from.x]
+        ) {
+          this.trafficCosts[rb.from.y][rb.from.x][dirIndex] = 1;
+        }
+      });
     } else if (this.mode === "add-store") {
       if (this.stores.length >= 3) {
         this.error = "Maximum 3 stores allowed";
@@ -418,7 +469,6 @@ export class DeliveryPlannerComponent
           this.tunnels.push({
             start: this.tunnelStart,
             end: pos,
-            cost: 5, // default tunnel cost
           });
         }
         this.tunnelStart = null;
@@ -431,8 +481,17 @@ export class DeliveryPlannerComponent
         this.gridCols,
         this.gridRows
       );
+      console.log(
+        `🖱️ Add-cost click at canvas coords (${x.toFixed(1)},${y.toFixed(1)})`
+      );
+      console.log(`   Detected wall:`, wallInfo);
       if (wallInfo) {
+        console.log(
+          `   Calling editEdgeCost for (${wallInfo.from.x},${wallInfo.from.y}) ${wallInfo.direction}`
+        );
         this.editEdgeCost(wallInfo.from, wallInfo.direction);
+      } else {
+        console.log(`   No wall detected at this position`);
       }
     } else if (this.mode === "move") {
       this.isDraggingCanvas = true;
@@ -448,6 +507,30 @@ export class DeliveryPlannerComponent
     // Don't draw anything if grid is not shown yet
     if (!this.showGrid) {
       return;
+    }
+
+    console.log(`Rendering grid with ${this.roadblocks.length} roadblocks...`);
+
+    // Log a sample of roadblock costs before rendering
+    if (this.roadblocks.length > 0) {
+      console.log("Sample roadblock costs before rendering:");
+      this.roadblocks
+        .slice(0, Math.min(3, this.roadblocks.length))
+        .forEach((rb, index) => {
+          const dirIndex = ["up", "down", "left", "right"].indexOf(
+            rb.direction
+          );
+          if (
+            dirIndex >= 0 &&
+            this.trafficCosts[rb.from.y] &&
+            this.trafficCosts[rb.from.y][rb.from.x]
+          ) {
+            const cost = this.trafficCosts[rb.from.y][rb.from.x][dirIndex];
+            console.log(
+              `  Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction} = cost ${cost}`
+            );
+          }
+        });
     }
 
     // Save context
@@ -487,7 +570,8 @@ export class DeliveryPlannerComponent
       this.roadblocks,
       this.gridRows,
       this.gridCols,
-      this.cellSize
+      this.cellSize,
+      this.trafficCosts
     );
 
     // Draw tunnel start indicator if in tunnel mode
@@ -518,11 +602,184 @@ export class DeliveryPlannerComponent
       this.gridRows,
       this.gridCols
     );
+
+    console.log("=== COMPONENT RECEIVING GENERATED DATA ===");
+    console.log(
+      `Received ${result.roadblocks.length} roadblocks from generator`
+    );
+    console.log(
+      `Received trafficCosts dimensions: ${result.trafficCosts.length}x${result.trafficCosts[0]?.length}x${result.trafficCosts[0]?.[0]?.length}`
+    );
+
+    // Verify roadblocks in received data
+    let componentInvalidRoadblocks = 0;
+    result.roadblocks.forEach((rb, index) => {
+      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+      const actualCost = result.trafficCosts[rb.from.y][rb.from.x][dirIndex];
+      if (actualCost !== 0) {
+        console.error(
+          `❌ COMPONENT: Roadblock ${index} at (${rb.from.x},${rb.from.y}) ${rb.direction} has cost ${actualCost} instead of 0!`
+        );
+        componentInvalidRoadblocks++;
+      }
+    });
+
     this.stores = result.stores;
     this.destinations = result.destinations;
     this.tunnels = result.tunnels;
     this.roadblocks = result.roadblocks;
     this.trafficCosts = result.trafficCosts;
+
+    console.log(`Component invalid roadblocks: ${componentInvalidRoadblocks}`);
+    console.log("=== CALLING ENFORCE ROADBLOCK COSTS ===");
+
+    // Ensure all roadblocks have cost 0 in traffic costs
+    this.enforceRoadblockCosts();
+
+    console.log("=== COMPONENT DATA ASSIGNMENT COMPLETE ===");
+  }
+
+  // Ensure all roadblocks have traffic cost of 0
+  private enforceRoadblockCosts(): void {
+    console.log(
+      `Enforcing roadblock costs for ${this.roadblocks.length} roadblocks...`
+    );
+
+    // First, normalize any roadblocks that might be stored with inconsistent coordinates
+    this.normalizeRoadblocks();
+
+    let fixedCount = 0;
+    let alreadyCorrectCount = 0;
+
+    this.roadblocks.forEach((rb, index) => {
+      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+      if (
+        dirIndex >= 0 &&
+        this.trafficCosts[rb.from.y] &&
+        this.trafficCosts[rb.from.y][rb.from.x]
+      ) {
+        const currentCost = this.trafficCosts[rb.from.y][rb.from.x][dirIndex];
+        const expectedCost = 0; // Roadblocks should always have cost 0
+
+        console.log(
+          `🔍 Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction}`
+        );
+        console.log(`   Current cost (trafficCosts array): ${currentCost}`);
+        console.log(`   Expected cost (blocked road): ${expectedCost}`);
+        console.log(
+          `   Match: ${currentCost === expectedCost ? "✅ YES" : "❌ NO"}`
+        );
+
+        if (currentCost !== expectedCost) {
+          this.trafficCosts[rb.from.y][rb.from.x][dirIndex] = expectedCost;
+          console.log(
+            `   🔧 Fixed: Changed cost from ${currentCost} to ${expectedCost}`
+          );
+          fixedCount++;
+        } else {
+          alreadyCorrectCount++;
+        }
+      } else {
+        console.error(
+          `❌ Invalid roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction} - out of bounds or invalid direction`
+        );
+      }
+    });
+
+    console.log(
+      `Enforce results: ${fixedCount} fixed, ${alreadyCorrectCount} already correct, ${
+        this.roadblocks.length - fixedCount - alreadyCorrectCount
+      } invalid`
+    );
+
+    // Final verification after enforcement
+    let postEnforceInvalid = 0;
+    this.roadblocks.forEach((rb) => {
+      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+      if (
+        dirIndex >= 0 &&
+        this.trafficCosts[rb.from.y] &&
+        this.trafficCosts[rb.from.y][rb.from.x]
+      ) {
+        const cost = this.trafficCosts[rb.from.y][rb.from.x][dirIndex];
+        if (cost !== 0) {
+          console.error(
+            `❌ POST-ENFORCE ERROR: Roadblock at (${rb.from.x},${rb.from.y}) ${rb.direction} still has cost ${cost}!`
+          );
+          postEnforceInvalid++;
+        }
+      }
+    });
+
+    if (postEnforceInvalid === 0) {
+      console.log(`✅ All roadblocks now have cost 0 after enforcement`);
+    } else {
+      console.error(
+        `❌ ${postEnforceInvalid} roadblocks still have incorrect costs after enforcement!`
+      );
+    }
+  }
+
+  // Normalize roadblock coordinates to ensure consistent representation
+  private normalizeRoadblocks(): void {
+    console.log(`Normalizing ${this.roadblocks.length} roadblocks...`);
+    let normalizedCount = 0;
+
+    this.roadblocks = this.roadblocks.map((rb) => {
+      let normalized = { ...rb };
+
+      // For vertical walls (left/right), ensure we use "right" direction from left cell
+      if (rb.direction === "left" && rb.from.x > 0) {
+        // Convert "left" wall of cell (x,y) to "right" wall of cell (x-1,y)
+        normalized = {
+          from: { x: rb.from.x - 1, y: rb.from.y },
+          direction: "right" as const,
+        };
+        normalizedCount++;
+        console.log(
+          `   Normalized: (${rb.from.x},${rb.from.y}) left → (${normalized.from.x},${normalized.from.y}) right`
+        );
+      }
+      // For horizontal walls (up/down), ensure we use "down" direction from top cell
+      else if (rb.direction === "up" && rb.from.y > 0) {
+        // Convert "up" wall of cell (x,y) to "down" wall of cell (x,y-1)
+        normalized = {
+          from: { x: rb.from.x, y: rb.from.y - 1 },
+          direction: "down" as const,
+        };
+        normalizedCount++;
+        console.log(
+          `   Normalized: (${rb.from.x},${rb.from.y}) up → (${normalized.from.x},${normalized.from.y}) down`
+        );
+      }
+
+      return normalized;
+    });
+
+    // Remove duplicates that might have been created by normalization
+    const uniqueRoadblocks = this.roadblocks.filter((rb, index, arr) => {
+      return (
+        arr.findIndex(
+          (other) =>
+            other.from.x === rb.from.x &&
+            other.from.y === rb.from.y &&
+            other.direction === rb.direction
+        ) === index
+      );
+    });
+
+    if (uniqueRoadblocks.length !== this.roadblocks.length) {
+      console.log(
+        `   Removed ${
+          this.roadblocks.length - uniqueRoadblocks.length
+        } duplicate roadblocks`
+      );
+      this.roadblocks = uniqueRoadblocks;
+    }
+
+    console.log(
+      `Normalization complete: ${normalizedCount} roadblocks normalized, ${this.roadblocks.length} total roadblocks`
+    );
   }
 
   // Animation methods using service
@@ -563,6 +820,9 @@ export class DeliveryPlannerComponent
     this.mode = mode;
     this.tunnelStart = null;
     this.error = null; // Clear any previous error messages
+    // Reset cost editing states when switching modes
+    this.isEditingCellCost = false;
+    this.isEditingEdgeCost = false;
     if (!this.showGrid) {
       this.showGrid = true;
       this.centerGrid();
@@ -638,49 +898,106 @@ export class DeliveryPlannerComponent
   }
 
   editCellCost(pos: Position): void {
-    const currentCosts = this.trafficCosts[pos.y][pos.x];
-    const costInput = prompt(
-      `Enter traffic costs for cell (${pos.x}, ${
-        pos.y
-      }) as: up,down,left,right\nCurrent: ${currentCosts.join(",")}`,
-      currentCosts.join(",")
-    );
+    this.editingCellPosition = pos;
+    this.editingCellCosts = [...this.trafficCosts[pos.y][pos.x]];
+    this.isEditingCellCost = true;
+  }
 
-    if (costInput !== null) {
-      const costs = costInput.split(",").map((c) => {
-        const num = parseInt(c.trim());
-        return isNaN(num) || num < 0 ? 0 : num;
-      });
-
-      if (costs.length === 4) {
-        this.trafficCosts[pos.y][pos.x] = costs;
-        this.routes = [];
-        this.renderGrid();
-      } else {
-        this.error =
-          "Please enter exactly 4 comma-separated numbers for up, down, left, right costs";
-      }
+  saveCellCost(): void {
+    if (this.editingCellPosition) {
+      this.trafficCosts[this.editingCellPosition.y][
+        this.editingCellPosition.x
+      ] = [...this.editingCellCosts];
+      this.routes = [];
+      this.renderGrid();
     }
+    this.cancelCellCostEdit();
+  }
+
+  cancelCellCostEdit(): void {
+    this.isEditingCellCost = false;
+    this.editingCellPosition = null;
   }
 
   editEdgeCost(from: Position, direction: string): void {
-    const dirIndex = ["up", "down", "left", "right"].indexOf(direction);
-    const currentCost = this.trafficCosts[from.y][from.x][dirIndex];
-    const costInput = prompt(
-      `Enter cost for ${direction} from cell (${from.x}, ${from.y}):\nCurrent: ${currentCost}`,
-      currentCost.toString()
+    // Check if there's a roadblock for this direction - if so, don't allow editing
+    const hasRoadblock = this.roadblocks.some(
+      (rb) =>
+        rb.from.x === from.x &&
+        rb.from.y === from.y &&
+        rb.direction === direction
     );
 
-    if (costInput !== null) {
-      const num = parseInt(costInput.trim());
-      if (!isNaN(num) && num >= 0) {
-        this.trafficCosts[from.y][from.x][dirIndex] = num;
-        this.routes = [];
-        this.renderGrid();
-      } else {
-        this.error = "Please enter a valid non-negative number";
-      }
+    console.log(`🔍 Roadblock check for (${from.x},${from.y}) ${direction}:`);
+    console.log(`   Total roadblocks: ${this.roadblocks.length}`);
+    this.roadblocks.forEach((rb, index) => {
+      console.log(
+        `   Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction}`
+      );
+    });
+    console.log(`   Exact match found: ${hasRoadblock}`);
+
+    if (hasRoadblock) {
+      this.error =
+        "Cannot change cost for blocked roads. Remove the roadblock first.";
+      return;
     }
+
+    const dirIndex = ["up", "down", "left", "right"].indexOf(direction);
+    const currentCost = this.trafficCosts[from.y][from.x][dirIndex];
+
+    console.log(
+      `📝 editEdgeCost called for (${from.x},${from.y}) ${direction}`
+    );
+    console.log(`   dirIndex: ${dirIndex}`);
+    console.log(
+      `   Array access: trafficCosts[${from.y}][${from.x}][${dirIndex}] = ${currentCost}`
+    );
+    console.log(`   Has roadblock: ${hasRoadblock}`);
+
+    this.editingEdgeFrom = from;
+    this.editingEdgeDirection = direction;
+    this.editingEdgeCost = currentCost;
+    this.isEditingEdgeCost = true;
+  }
+
+  saveEdgeCost(): void {
+    if (this.editingEdgeFrom) {
+      // Validate cost is between 1-4
+      if (this.editingEdgeCost < 1 || this.editingEdgeCost > 4) {
+        this.error = "Edge cost must be between 1 and 4";
+        return;
+      }
+
+      const dirIndex = ["up", "down", "left", "right"].indexOf(
+        this.editingEdgeDirection
+      );
+      this.trafficCosts[this.editingEdgeFrom.y][this.editingEdgeFrom.x][
+        dirIndex
+      ] = this.editingEdgeCost;
+
+      // If we set a cost > 0, remove any roadblock for this direction
+      if (this.editingEdgeCost > 0) {
+        this.roadblocks = this.roadblocks.filter(
+          (rb) =>
+            !(
+              rb.from.x === this.editingEdgeFrom!.x &&
+              rb.from.y === this.editingEdgeFrom!.y &&
+              rb.direction === this.editingEdgeDirection
+            )
+        );
+      }
+
+      this.routes = [];
+      this.renderGrid();
+    }
+    this.cancelEdgeCostEdit();
+  }
+
+  cancelEdgeCostEdit(): void {
+    this.isEditingEdgeCost = false;
+    this.editingEdgeFrom = null;
+    this.editingEdgeDirection = "";
   }
 
   // Missing methods for HTML template

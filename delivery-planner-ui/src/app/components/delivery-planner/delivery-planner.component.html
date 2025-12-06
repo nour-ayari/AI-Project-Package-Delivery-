@@ -105,6 +105,97 @@
         >
           <i class="tool-icon">💰</i> Add Cost
         </button>
+
+        <!-- Cost Editing Panel -->
+        <div
+          class="cost-editing-panel"
+          *ngIf="isEditingCellCost || isEditingEdgeCost"
+          [@slideInAnimation]
+        >
+          <div class="cost-editor">
+            <h4 *ngIf="isEditingCellCost">
+              Edit Cell Costs - Cell ({{ editingCellPosition?.x }},
+              {{ editingCellPosition?.y }})
+            </h4>
+            <h4 *ngIf="isEditingEdgeCost">
+              Edit Edge Cost - {{ editingEdgeDirection | titlecase }} from ({{
+                editingEdgeFrom?.x
+              }}, {{ editingEdgeFrom?.y }})
+            </h4>
+
+            <div class="cost-inputs" *ngIf="isEditingCellCost">
+              <div class="cost-input-group">
+                <label>Up:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="editingCellCosts[0]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+              <div class="cost-input-group">
+                <label>Down:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="editingCellCosts[1]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+              <div class="cost-input-group">
+                <label>Left:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="editingCellCosts[2]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+              <div class="cost-input-group">
+                <label>Right:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="editingCellCosts[3]"
+                  min="0"
+                  class="cost-input"
+                />
+              </div>
+            </div>
+
+            <div class="cost-inputs" *ngIf="isEditingEdgeCost">
+              <div class="cost-input-group">
+                <label>{{ editingEdgeDirection | titlecase }} Cost:</label>
+                <input
+                  type="number"
+                  [(ngModel)]="editingEdgeCost"
+                  min="1"
+                  max="4"
+                  class="cost-input"
+                />
+              </div>
+            </div>
+
+            <div class="cost-editor-actions">
+              <button
+                class="save-btn"
+                (click)="isEditingCellCost ? saveCellCost() : saveEdgeCost()"
+              >
+                <i class="tool-icon">✓</i> Save
+              </button>
+              <button
+                class="cancel-btn"
+                (click)="
+                  isEditingCellCost
+                    ? cancelCellCostEdit()
+                    : cancelEdgeCostEdit()
+                "
+              >
+                <i class="tool-icon">✕</i> Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
         <button
           [class.active]="mode === 'generate-random'"
           (click)="generateRandomGrid()"

@@ -10,7 +10,6 @@ export interface Position {
 export interface TunnelConfig {
   start: Position;
   end: Position;
-  cost: number;
 }
 
 export interface RoadBlockConfig {

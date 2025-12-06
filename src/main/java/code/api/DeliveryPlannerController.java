@@ -156,7 +156,7 @@ public class DeliveryPlannerController {
             for (GridConfig.TunnelConfig tc : config.getTunnels()) {
                 State start = new State(tc.getStart().getX(), tc.getStart().getY());
                 State end = new State(tc.getEnd().getX(), tc.getEnd().getY());
-                grid.tunnels.add(new Tunnel(start, end, tc.getCost()));
+                grid.tunnels.add(new Tunnel(start, end));
             }
         }
 
@@ -170,20 +170,29 @@ public class DeliveryPlannerController {
                 switch (rb.getDirection()) {
                     case "up":
                         to = new State(from.x, from.y - 1);
+                        // Ensure traffic cost is 0 for blocked direction (index 0 = up)
+                        grid.traffic[from.y][from.x][0] = 0;
                         break;
                     case "down":
                         to = new State(from.x, from.y + 1);
+                        // Ensure traffic cost is 0 for blocked direction (index 1 = down)
+                        grid.traffic[from.y][from.x][1] = 0;
                         break;
                     case "left":
                         to = new State(from.x - 1, from.y);
+                        // Ensure traffic cost is 0 for blocked direction (index 2 = left)
+                        grid.traffic[from.y][from.x][2] = 0;
                         break;
                     case "right":
                         to = new State(from.x + 1, from.y);
+                        // Ensure traffic cost is 0 for blocked direction (index 3 = right)
+                        grid.traffic[from.y][from.x][3] = 0;
                         break;
                 }
 
-                if (to != null)
+                if (to != null) {
                     grid.blockedRoads.add(new RoadBlock(from, to));
+                }
             }
             System.out.println("DEBUG: Total roadblocks in grid: " + grid.blockedRoads.size());
         }

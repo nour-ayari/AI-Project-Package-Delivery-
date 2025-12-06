@@ -166,7 +166,8 @@ export class GridRendererService {
     roadblocks: RoadBlockConfig[],
     gridRows: number,
     gridCols: number,
-    cellSize: number
+    cellSize: number,
+    trafficCosts: number[][][]
   ): void {
     this.ctx.fillStyle = "#F44336";
     this.ctx.strokeStyle = "#F44336";
@@ -181,6 +182,35 @@ export class GridRendererService {
         (rb.direction === "up" && rb.from.y - 1 < 0)
       ) {
         continue;
+      }
+
+      // Get direction index and check if cost is actually 0
+      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+      if (
+        dirIndex < 0 ||
+        !trafficCosts[rb.from.y] ||
+        !trafficCosts[rb.from.y][rb.from.x]
+      ) {
+        console.error(
+          `Invalid roadblock data: (${rb.from.x},${rb.from.y}) ${rb.direction}`
+        );
+        continue;
+      }
+      const cost = trafficCosts[rb.from.y][rb.from.x][dirIndex];
+
+      console.log(
+        `🎨 Renderer checking roadblock (${rb.from.x},${rb.from.y}) ${rb.direction}: dirIndex=${dirIndex}, cost = ${cost}`
+      );
+      console.log(
+        `   Array access: trafficCosts[${rb.from.y}][${rb.from.x}][${dirIndex}] = ${cost}`
+      );
+
+      // Only draw red line if cost is 0 (truly blocked)
+      if (cost !== 0) {
+        console.warn(
+          `Roadblock at (${rb.from.x},${rb.from.y}) ${rb.direction} has cost ${cost} - not drawing red line`
+        );
+        continue; // Skip drawing if cost is not 0
       }
 
       let fromX = rb.from.x * cellSize;

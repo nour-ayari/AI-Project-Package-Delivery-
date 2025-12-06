@@ -12,6 +12,10 @@ export class GridInteractionService {
    * Detects which wall was clicked by finding the nearest edge/boundary between cells.
    * This method handles clicks near cell boundaries more accurately by considering
    * which actual wall (between two cells) the user intended to click.
+   *
+   * Normalizes wall coordinates to ensure the same physical wall always has the same representation:
+   * - Vertical walls: always represented from the left cell's "right" direction
+   * - Horizontal walls: always represented from the top cell's "down" direction
    */
   detectWallClick(
     x: number,
@@ -41,7 +45,7 @@ export class GridInteractionService {
       const rightCellX = nearestVerticalLine;
       const cellY = Math.floor(y / cellSize);
 
-      // Check if either cell is valid
+      // Normalize: always represent vertical walls from the left cell's "right" direction
       if (
         leftCellX >= 0 &&
         leftCellX < gridCols &&
@@ -56,7 +60,7 @@ export class GridInteractionService {
         cellY >= 0 &&
         cellY < gridRows
       ) {
-        // Wall is to the left of the right cell
+        // This shouldn't happen with normalization, but fallback
         return { from: { x: rightCellX, y: cellY }, direction: "left" };
       }
     } else if (distToHorizontalLine < edgeThreshold) {
@@ -65,7 +69,7 @@ export class GridInteractionService {
       const bottomCellY = nearestHorizontalLine;
       const cellX = Math.floor(x / cellSize);
 
-      // Check if either cell is valid
+      // Normalize: always represent horizontal walls from the top cell's "down" direction
       if (
         topCellY >= 0 &&
         topCellY < gridRows &&
@@ -80,7 +84,7 @@ export class GridInteractionService {
         cellX >= 0 &&
         cellX < gridCols
       ) {
-        // Wall is above the bottom cell
+        // This shouldn't happen with normalization, but fallback
         return { from: { x: cellX, y: bottomCellY }, direction: "up" };
       }
     } else {
@@ -107,10 +111,25 @@ export class GridInteractionService {
         );
 
         let direction: "up" | "down" | "left" | "right";
-        if (minDist === distToLeft) direction = "left";
-        else if (minDist === distToRight) direction = "right";
-        else if (minDist === distToTop) direction = "up";
-        else direction = "down";
+        if (minDist === distToLeft) {
+          // Normalize: represent left wall as right wall of cell to the left
+          if (gridX > 0) {
+            return { from: { x: gridX - 1, y: gridY }, direction: "right" };
+          } else {
+            direction = "left";
+          }
+        } else if (minDist === distToRight) {
+          direction = "right";
+        } else if (minDist === distToTop) {
+          // Normalize: represent top wall as down wall of cell above
+          if (gridY > 0) {
+            return { from: { x: gridX, y: gridY - 1 }, direction: "down" };
+          } else {
+            direction = "up";
+          }
+        } else {
+          direction = "down";
+        }
 
         return { from: { x: gridX, y: gridY }, direction };
       }

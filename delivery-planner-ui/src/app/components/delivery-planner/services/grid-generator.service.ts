@@ -86,11 +86,10 @@ export class GridGeneratorService {
       tunnels.push({
         start,
         end,
-        cost: Math.floor(Math.random() * 10) + 1, // Random cost 1-10
       });
     }
 
-    // Generate random roadblocks
+    // Generate random roadblocks FIRST
     for (let i = 0; i < numRoadblocks; i++) {
       let pos: Position;
       const directions = ["up", "down", "left", "right"];
@@ -111,26 +110,97 @@ export class GridGeneratorService {
         const direction = shuffledDirections[j];
         roadblocks.push({ from: pos, direction });
 
-        // Set traffic cost to 0 for blocked direction
+        // IMPORTANT: Set traffic cost to 0 for blocked direction
         const dirIndex = ["up", "down", "left", "right"].indexOf(direction);
         trafficCosts[pos.y][pos.x][dirIndex] = 0;
       }
     }
 
-    // Add some random traffic costs
+    // Add some random traffic costs (skip directions with roadblocks)
     for (let y = 0; y < gridRows; y++) {
       for (let x = 0; x < gridCols; x++) {
         if (Math.random() < 0.3) {
           // 30% chance to have custom costs
-          trafficCosts[y][x] = [
+          const newCosts = [
             Math.floor(Math.random() * 4) + 1, // up 1-4
             Math.floor(Math.random() * 4) + 1, // down 1-4
             Math.floor(Math.random() * 4) + 1, // left 1-4
             Math.floor(Math.random() * 4) + 1, // right 1-4
           ];
+
+          // Don't override roadblock costs (which are 0)
+          for (let dir = 0; dir < 4; dir++) {
+            const directionName = ["up", "down", "left", "right"][dir];
+            const hasRoadblock = roadblocks.some(
+              (rb) =>
+                rb.from.x === x &&
+                rb.from.y === y &&
+                rb.direction === directionName
+            );
+            if (!hasRoadblock) {
+              trafficCosts[y][x][dir] = newCosts[dir];
+            }
+          }
         }
       }
     }
+
+    // Final verification: ensure all roadblocks have cost 0
+    console.log("=== FINAL ROADBLOCK VERIFICATION ===");
+    console.log(`Total roadblocks generated: ${roadblocks.length}`);
+    let invalidRoadblocks = 0;
+    roadblocks.forEach((rb, index) => {
+      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+      const actualCost = trafficCosts[rb.from.y][rb.from.x][dirIndex];
+      console.log(
+        `Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction} -> cost: ${actualCost}`
+      );
+      if (actualCost !== 0) {
+        console.error(
+          `❌ ERROR: Roadblock at (${rb.from.x},${rb.from.y}) ${rb.direction} has cost ${actualCost} instead of 0!`
+        );
+        invalidRoadblocks++;
+      }
+    });
+
+    // Also check for any cells that have cost 0 but no roadblock (shouldn't happen)
+    let orphanedZeroCosts = 0;
+    for (let y = 0; y < gridRows; y++) {
+      for (let x = 0; x < gridCols; x++) {
+        for (let dir = 0; dir < 4; dir++) {
+          const cost = trafficCosts[y][x][dir];
+          if (cost === 0) {
+            const directionName = ["up", "down", "left", "right"][dir];
+            const hasRoadblock = roadblocks.some(
+              (rb) =>
+                rb.from.x === x &&
+                rb.from.y === y &&
+                rb.direction === directionName
+            );
+            if (!hasRoadblock) {
+              console.warn(
+                `⚠️  Orphaned zero cost: (${x},${y}) ${directionName} has cost 0 but no roadblock!`
+              );
+              orphanedZeroCosts++;
+            }
+          }
+        }
+      }
+    }
+
+    console.log(`Invalid roadblocks: ${invalidRoadblocks}`);
+    console.log(`Orphaned zero costs: ${orphanedZeroCosts}`);
+
+    if (invalidRoadblocks === 0 && orphanedZeroCosts === 0) {
+      console.log(
+        `✅ All ${roadblocks.length} roadblocks have correct cost 0 and no orphaned zeros`
+      );
+    } else {
+      console.error(
+        `❌ Issues found: ${invalidRoadblocks} invalid roadblocks, ${orphanedZeroCosts} orphaned zeros`
+      );
+    }
+    console.log("=== END VERIFICATION ===");
 
     return { stores, destinations, tunnels, roadblocks, trafficCosts };
   }
