@@ -839,7 +839,6 @@ export class DeliveryPlannerComponent
         this.updateDetailedResults();
       } catch (err) {
         this.gridState.error = "Invalid grid file format";
-        console.error("Import error:", err);
       }
     };
 
