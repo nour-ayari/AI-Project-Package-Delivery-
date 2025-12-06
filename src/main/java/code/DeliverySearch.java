@@ -61,27 +61,45 @@ public class DeliverySearch implements SearchProblem {
         // Normalize strategy name (support both short codes and full names)
         String normalizedStrategy = normalizeStrategy(strategy);
 
+        SearchResult result;
         switch (normalizedStrategy) {
             case "BF":
-                return GenericSearch.BFS(problem);
+                result = GenericSearch.BFS(problem);
+                break;
             case "DF":
-                return GenericSearch.DFS(problem);
+                result = GenericSearch.DFS(problem);
+                break;
             case "UC":
-                return GenericSearch.UCS(problem);
+                result = GenericSearch.UCS(problem);
+                break;
             case "ID":
-                return GenericSearch.ID(problem);
+                result = GenericSearch.ID(problem);
+                break;
             case "G1":
-                return GenericSearch.Greedy(problem, 1);
+                result = GenericSearch.Greedy(problem, 1);
+                break;
             case "G2":
-                return GenericSearch.Greedy(problem, 2);
+                result = GenericSearch.Greedy(problem, 2);
+                break;
             case "AS1":
-                return GenericSearch.AStar(problem, 1);
+                result = GenericSearch.AStar(problem, 1);
+                break;
             case "AS2":
-                return GenericSearch.AStar(problem, 2);
+                result = GenericSearch.AStar(problem, 2);
+                break;
             default:
                 System.out.println("Unknown strategy " + strategy);
                 return null;
         }
+        
+        // Print node expansion details to console
+        if (result != null) {
+            System.out.println("  Route: " + start + " → " + goal + 
+                             " | Nodes Expanded: " + result.nodesExpanded + 
+                             " | Path Cost: " + result.cost);
+        }
+        
+        return result;
     }
 
     /**
