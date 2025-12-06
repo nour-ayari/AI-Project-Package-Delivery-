@@ -544,15 +544,13 @@ export class DeliveryPlannerComponent
       this.gridState.gridCols
     );
 
-    // Verify roadblocks in received data
-    let componentInvalidRoadblocks = 0;
-    result.roadblocks.forEach((rb, index) => {
-      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
-      const actualCost = result.trafficCosts[rb.from.y][rb.from.x][dirIndex];
-      if (actualCost !== 0) {
-        componentInvalidRoadblocks++;
-      }
-    });
+    // Log validation issues if any were found
+    if (result.validationIssues.length > 0) {
+      console.warn(
+        `Grid generation validation found ${result.validationIssues.length} issue(s):`,
+        result.validationIssues
+      );
+    }
 
     this.gridState.stores = result.stores;
     this.gridState.destinations = result.destinations;
