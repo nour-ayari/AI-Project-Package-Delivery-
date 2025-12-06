@@ -76,7 +76,6 @@ public class DeliverySearch implements SearchProblem {
             case "AS2":
                 return GenericSearch.AStar(problem, 2);
             default:
-                System.out.println("Unknown strategy " + strategy);
                 return null;
         }
     }

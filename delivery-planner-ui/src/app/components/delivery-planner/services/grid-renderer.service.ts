@@ -19,6 +19,13 @@ export class GridRendererService {
     this.isDarkTheme = isDarkTheme;
   }
 
+  private getCssVariable(variableName: string): string {
+    // Get the computed style from document body to access CSS variables
+    const root = document.documentElement;
+    const computedStyle = getComputedStyle(root);
+    return computedStyle.getPropertyValue(variableName).trim();
+  }
+
   drawGridLines(gridRows: number, gridCols: number, cellSize: number): void {
     this.ctx.strokeStyle = this.isDarkTheme
       ? "rgba(255, 255, 255, 0.1)"
@@ -48,8 +55,8 @@ export class GridRendererService {
       const centerY = store.y * cellSize + cellSize / 2;
 
       // Draw circle background
-      this.ctx.fillStyle = "#B19CD9";
-      this.ctx.strokeStyle = "#8B7BB8";
+      this.ctx.fillStyle = this.getCssVariable("--store-color");
+      this.ctx.strokeStyle = this.getCssVariable("--secondary-color");
       this.ctx.lineWidth = 3;
       this.ctx.beginPath();
       this.ctx.arc(centerX, centerY, cellSize * 0.3, 0, 2 * Math.PI);
@@ -71,8 +78,8 @@ export class GridRendererService {
       const centerY = dest.y * cellSize + cellSize / 2;
 
       // Draw square background
-      this.ctx.fillStyle = "#FF5722";
-      this.ctx.strokeStyle = "#D84315";
+      this.ctx.fillStyle = "#ff6131ff";
+      this.ctx.strokeStyle = "#e74b1bff";
       this.ctx.lineWidth = 3;
       this.ctx.beginPath();
       this.ctx.rect(
@@ -94,7 +101,7 @@ export class GridRendererService {
   }
 
   drawTunnels(tunnels: TunnelConfig[], cellSize: number): void {
-    this.ctx.strokeStyle = "#9C27B0";
+    this.ctx.strokeStyle = this.getCssVariable("--tunnel-color");
     this.ctx.lineWidth = 4;
     this.ctx.setLineDash([10, 5]);
 
@@ -110,7 +117,7 @@ export class GridRendererService {
       this.ctx.stroke();
 
       // Draw tunnel entrance/exit markers
-      this.ctx.fillStyle = "#9C27B0";
+      this.ctx.fillStyle = this.getCssVariable("--tunnel-color");
       this.ctx.beginPath();
       this.ctx.arc(startX, startY, 8, 0, 2 * Math.PI);
       this.ctx.fill();
@@ -128,7 +135,7 @@ export class GridRendererService {
     gridCols: number,
     cellSize: number
   ): void {
-    this.ctx.fillStyle = this.isDarkTheme ? "#AAAAAA" : "#555555";
+    this.ctx.fillStyle = this.getCssVariable("--text-secondary");
     this.ctx.font = `${Math.max(8, cellSize * 0.12)}px Arial`;
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
@@ -169,8 +176,8 @@ export class GridRendererService {
     cellSize: number,
     trafficCosts: number[][][]
   ): void {
-    this.ctx.fillStyle = "#F44336";
-    this.ctx.strokeStyle = "#F44336";
+    this.ctx.fillStyle = this.getCssVariable("--roadblock-color");
+    this.ctx.strokeStyle = this.getCssVariable("--roadblock-color");
     this.ctx.lineWidth = Math.max(4, cellSize / 8); // Wall thickness
 
     for (const rb of roadblocks) {
@@ -184,33 +191,19 @@ export class GridRendererService {
         continue;
       }
 
-      // Get direction index and check if cost is actually 0
       const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
       if (
         dirIndex < 0 ||
         !trafficCosts[rb.from.y] ||
         !trafficCosts[rb.from.y][rb.from.x]
       ) {
-        console.error(
-          `Invalid roadblock data: (${rb.from.x},${rb.from.y}) ${rb.direction}`
-        );
         continue;
       }
       const cost = trafficCosts[rb.from.y][rb.from.x][dirIndex];
 
-      console.log(
-        `🎨 Renderer checking roadblock (${rb.from.x},${rb.from.y}) ${rb.direction}: dirIndex=${dirIndex}, cost = ${cost}`
-      );
-      console.log(
-        `   Array access: trafficCosts[${rb.from.y}][${rb.from.x}][${dirIndex}] = ${cost}`
-      );
-
       // Only draw red line if cost is 0 (truly blocked)
       if (cost !== 0) {
-        console.warn(
-          `Roadblock at (${rb.from.x},${rb.from.y}) ${rb.direction} has cost ${cost} - not drawing red line`
-        );
-        continue; // Skip drawing if cost is not 0
+        continue; 
       }
 
       let fromX = rb.from.x * cellSize;
@@ -249,7 +242,7 @@ export class GridRendererService {
     const centerX = tunnelStart.x * cellSize + cellSize / 2;
     const centerY = tunnelStart.y * cellSize + cellSize / 2;
 
-    this.ctx.strokeStyle = "#9C27B0";
+    this.ctx.strokeStyle = this.getCssVariable("--tunnel-color");
     this.ctx.lineWidth = 3;
     this.ctx.setLineDash([5, 5]);
     this.ctx.beginPath();
@@ -262,9 +255,10 @@ export class GridRendererService {
     routes: DeliveryRoute[],
     isAnimating: boolean,
     currentAnimatingRoute: number,
+    currentAnimatingStep: number,
     cellSize: number
   ): void {
-    // Only draw routes during animation - show only the currently animating route
+    // Only draw routes during animation - show only the currently animating route up to current step
     if (!isAnimating) {
       return;
     }
@@ -278,10 +272,14 @@ export class GridRendererService {
     const route = routes[routeIndex];
     if (!route.path || route.path.length === 0) return;
 
+    // Draw the path up to the current animating step (inclusive)
+    const stepsToDraw = Math.min(currentAnimatingStep + 1, route.path.length);
+    if (stepsToDraw < 2) return; // Need at least 2 points to draw a line
+
     // Highlight the currently animating route with gold color
-    this.ctx.strokeStyle = "#FFD700";
+    this.ctx.strokeStyle = this.getCssVariable("--path-color");
     this.ctx.lineWidth = 6; // Thicker line for active route
-    this.ctx.shadowColor = "#FFD700";
+    this.ctx.shadowColor = this.getCssVariable("--path-color");
     this.ctx.shadowBlur = 10;
     this.ctx.lineCap = "round";
     this.ctx.lineJoin = "round";
@@ -293,7 +291,7 @@ export class GridRendererService {
       firstPoint.y * cellSize + cellSize / 2
     );
 
-    for (let j = 1; j < route.path.length; j++) {
+    for (let j = 1; j < stepsToDraw; j++) {
       const point = route.path[j];
       this.ctx.lineTo(
         point.x * cellSize + cellSize / 2,
@@ -303,11 +301,16 @@ export class GridRendererService {
 
     this.ctx.stroke();
 
-    // Draw arrow at the end
-    if (route.path.length > 1) {
-      const lastPoint = route.path[route.path.length - 1];
-      const secondLastPoint = route.path[route.path.length - 2];
-      this.drawArrow(secondLastPoint, lastPoint, "#FFD700", cellSize);
+    // Draw arrow at the current position (end of drawn path)
+    if (stepsToDraw > 1) {
+      const lastDrawnPoint = route.path[stepsToDraw - 1];
+      const secondLastDrawnPoint = route.path[stepsToDraw - 2];
+      this.drawArrow(
+        secondLastDrawnPoint,
+        lastDrawnPoint,
+        this.getCssVariable("--path-color"),
+        cellSize
+      );
     }
 
     // Reset shadow

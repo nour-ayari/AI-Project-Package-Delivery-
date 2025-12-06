@@ -12,10 +12,7 @@ import { FormsModule } from "@angular/forms";
 import { HttpClientModule } from "@angular/common/http";
 import {
   DeliveryPlannerService,
-  GridConfig,
   Position,
-  TunnelConfig,
-  RoadBlockConfig,
   DeliveryRoute,
 } from "../../services/delivery-planner.service";
 import {
@@ -29,6 +26,10 @@ import { GridInteractionService } from "./services/grid-interaction.service";
 import { GridRendererService } from "./services/grid-renderer.service";
 import { GridGeneratorService } from "./services/grid-generator.service";
 import { AnimationService } from "./services/animation.service";
+import { GridStateService } from "./services/grid-state.service";
+import { CanvasViewportService } from "./services/canvas-viewport.service";
+import { ResultsService } from "./services/results.service";
+import { CostEditingService } from "./services/cost-editing.service";
 
 @Component({
   selector: "app-delivery-planner",
@@ -42,6 +43,10 @@ import { AnimationService } from "./services/animation.service";
     GridRendererService,
     GridGeneratorService,
     AnimationService,
+    GridStateService,
+    CanvasViewportService,
+    ResultsService,
+    CostEditingService,
   ],
   animations: [
     trigger("fadeAnimation", [
@@ -126,84 +131,36 @@ export class DeliveryPlannerComponent
   @ViewChild("gridCanvas") canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private ctx!: CanvasRenderingContext2D;
-  private scale: number = 1;
-  private offset = { x: 0, y: 0 };
-  private lastMousePosition = { x: 0, y: 0 };
-  private isDraggingCanvas = false;
   private animationFrameId: number | null = null;
 
   // Theme
   isDarkTheme = false;
-
-  // Grid visibility
-  showGrid = false;
-
-  // Grid configuration
-  gridRows = 10;
-  gridCols = 10;
-  cellSize = 50;
-
-  // Grid data
-  stores: Position[] = [];
-  destinations: Position[] = [];
-  tunnels: TunnelConfig[] = [];
-  roadblocks: RoadBlockConfig[] = [];
-  trafficCosts: number[][][] = []; // [y][x][direction]
-
-  // Operation modes
-  mode:
-    | "move"
-    | "add-store"
-    | "add-destination"
-    | "add-tunnel"
-    | "add-roadblock"
-    | "add-cost"
-    | "generate-random"
-    | "delete" = "move";
-  tunnelStart: Position | null = null;
-
-  // Strategy
-  selectedStrategy = "BFS";
-  strategies = ["BFS", "DFS", "UCS", "AStar", "Greedy"];
-
-  // Results
-  routes: DeliveryRoute[] = [];
-  isLoading = false;
-  error: string | null = null;
-
-  // Animation state
-  truckPosition: Position | null = null;
-
-  // Cost editing state
-  isEditingCellCost = false;
-  editingCellPosition: Position | null = null;
-  editingCellCosts = [1, 1, 1, 1]; // [up, down, left, right]
-
-  isEditingEdgeCost = false;
-  editingEdgeFrom: Position | null = null;
-  editingEdgeDirection = "";
-  editingEdgeCost = 1;
 
   constructor(
     private deliveryService: DeliveryPlannerService,
     private gridInteraction: GridInteractionService,
     private gridRenderer: GridRendererService,
     private gridGenerator: GridGeneratorService,
-    private animationService: AnimationService
+    private animationService: AnimationService,
+    public gridState: GridStateService,
+    public viewport: CanvasViewportService,
+    public resultsService: ResultsService,
+    public costEditing: CostEditingService
   ) {}
 
   ngOnInit(): void {
     // Load theme preference
     this.isDarkTheme = localStorage.getItem("deliveryPlannerTheme") === "dark";
 
-    // Initialize traffic costs (default 1 for all directions)
-    this.initializeTrafficCosts();
+    // Update detailed results
+    this.updateDetailedResults();
 
     // Setup animation callbacks
     this.animationService.setCallbacks(
       (route: number, step: number) =>
         this.onAnimationPositionUpdate(route, step),
-      () => this.onAnimationComplete()
+      () => this.onAnimationComplete(),
+      (route: number) => this.onRouteComplete(route)
     );
   }
 
@@ -254,16 +211,6 @@ export class DeliveryPlannerComponent
     this.renderGrid();
   }
 
-  private initializeTrafficCosts(): void {
-    this.trafficCosts = [];
-    for (let y = 0; y < this.gridRows; y++) {
-      this.trafficCosts[y] = [];
-      for (let x = 0; x < this.gridCols; x++) {
-        this.trafficCosts[y][x] = [1, 1, 1, 1]; // [up, down, left, right]
-      }
-    }
-  }
-
   private resizeCanvas(): void {
     const canvas = this.canvasRef.nativeElement;
     const parentWidth = canvas.parentElement!.clientWidth;
@@ -280,12 +227,15 @@ export class DeliveryPlannerComponent
 
   private centerGrid(): void {
     const canvas = this.canvasRef.nativeElement;
-    const gridWidth = this.gridCols * this.cellSize;
-    const gridHeight = this.gridRows * this.cellSize;
+    const gridWidth = this.gridState.gridCols * this.gridState.cellSize;
+    const gridHeight = this.gridState.gridRows * this.gridState.cellSize;
 
-    // Calculate offset to center the grid
-    this.offset.x = (canvas.width / this.scale - gridWidth) / 2;
-    this.offset.y = (canvas.height / this.scale - gridHeight) / 2;
+    this.viewport.centerGrid(
+      canvas.width,
+      canvas.height,
+      gridWidth,
+      gridHeight
+    );
   }
 
   private startAnimationLoop(): void {
@@ -311,29 +261,32 @@ export class DeliveryPlannerComponent
 
   private handleMouseDown(e: MouseEvent): void {
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / this.scale - this.offset.x;
-    const y = (e.clientY - rect.top) / this.scale - this.offset.y;
+    const x =
+      (e.clientX - rect.left) / this.viewport.getScale() -
+      this.viewport.getOffset().x;
+    const y =
+      (e.clientY - rect.top) / this.viewport.getScale() -
+      this.viewport.getOffset().y;
 
     this.processPointerDown(x, y);
-    this.lastMousePosition = { x: e.clientX, y: e.clientY };
+    this.viewport.setLastMousePosition(e.clientX, e.clientY);
   }
 
   private handleMouseMove(e: MouseEvent): void {
-    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    if (this.isDraggingCanvas) {
-      const dx = clientX - this.lastMousePosition.x;
-      const dy = clientY - this.lastMousePosition.y;
-      this.offset.x += dx / this.scale;
-      this.offset.y += dy / this.scale;
-      this.lastMousePosition = { x: clientX, y: clientY };
+    if (this.viewport.isDragging()) {
+      const lastPos = this.viewport.getLastMousePosition();
+      const dx = clientX - lastPos.x;
+      const dy = clientY - lastPos.y;
+      this.viewport.handlePan(dx, dy);
+      this.viewport.setLastMousePosition(clientX, clientY);
     }
   }
 
   private handleMouseUp(): void {
-    this.isDraggingCanvas = false;
+    this.viewport.setDragging(false);
   }
 
   private handleWheel(e: WheelEvent): void {
@@ -343,30 +296,21 @@ export class DeliveryPlannerComponent
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const worldX = mouseX / this.scale - this.offset.x;
-    const worldY = mouseY / this.scale - this.offset.y;
-
-    const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
-    this.scale *= zoomFactor;
-
-    this.scale = Math.min(Math.max(0.5, this.scale), 3);
-
-    this.offset.x = mouseX / this.scale - worldX;
-    this.offset.y = mouseY / this.scale - worldY;
+    this.viewport.handleZoom(mouseX, mouseY, e.deltaY < 0);
   }
 
   private processPointerDown(x: number, y: number): void {
-    const gridX = Math.floor(x / this.cellSize);
-    const gridY = Math.floor(y / this.cellSize);
+    const gridX = Math.floor(x / this.gridState.cellSize);
+    const gridY = Math.floor(y / this.gridState.cellSize);
 
     if (
       gridX < 0 ||
-      gridX >= this.gridCols ||
+      gridX >= this.gridState.gridCols ||
       gridY < 0 ||
-      gridY >= this.gridRows
+      gridY >= this.gridState.gridRows
     ) {
-      if (this.mode === "move") {
-        this.isDraggingCanvas = true;
+      if (this.gridState.mode === "move") {
+        this.viewport.setDragging(true);
       }
       return;
     }
@@ -374,37 +318,39 @@ export class DeliveryPlannerComponent
     const pos: Position = { x: gridX, y: gridY };
 
     // Special handling for roadblock mode - detect which edge/wall was clicked
-    if (this.mode === "add-roadblock") {
+    if (this.gridState.mode === "add-roadblock") {
       const wallInfo = this.gridInteraction.detectWallClick(
         x,
         y,
-        this.cellSize,
-        this.gridCols,
-        this.gridRows
+        this.gridState.cellSize,
+        this.gridState.gridCols,
+        this.gridState.gridRows
       );
       if (wallInfo) {
         // Check if roadblock already exists
-        const exists = this.roadblocks.some(
+        const exists = this.gridState.roadblocks.some(
           (rb) =>
             rb.from.x === wallInfo.from.x &&
             rb.from.y === wallInfo.from.y &&
             rb.direction === wallInfo.direction
         );
         if (!exists) {
-          this.roadblocks.push({
+          this.gridState.roadblocks.push({
             from: wallInfo.from,
             direction: wallInfo.direction,
           });
-          // IMPORTANT: Set traffic cost to 0 for blocked direction
+          this.updateDetailedResults();
           const dirIndex = ["up", "down", "left", "right"].indexOf(
             wallInfo.direction
           );
           if (
             dirIndex >= 0 &&
-            this.trafficCosts[wallInfo.from.y] &&
-            this.trafficCosts[wallInfo.from.y][wallInfo.from.x]
+            this.gridState.trafficCosts[wallInfo.from.y] &&
+            this.gridState.trafficCosts[wallInfo.from.y][wallInfo.from.x]
           ) {
-            this.trafficCosts[wallInfo.from.y][wallInfo.from.x][dirIndex] = 0;
+            this.gridState.trafficCosts[wallInfo.from.y][wallInfo.from.x][
+              dirIndex
+            ] = 0;
           }
         }
       }
@@ -412,89 +358,91 @@ export class DeliveryPlannerComponent
       return;
     }
 
-    if (this.mode === "delete") {
-      const deletedRoadblocks = this.roadblocks.filter(
+    if (this.gridState.mode === "delete") {
+      const deletedRoadblocks = this.gridState.roadblocks.filter(
         (rb) => rb.from.x === pos.x && rb.from.y === pos.y
-      );
-      console.log(
-        `Deleting ${deletedRoadblocks.length} roadblocks at (${pos.x},${pos.y})`
       );
 
       const result = this.gridInteraction.deleteAtPosition(
         pos,
-        this.stores,
-        this.destinations,
-        this.tunnels,
-        this.roadblocks
+        this.gridState.stores,
+        this.gridState.destinations,
+        this.gridState.tunnels,
+        this.gridState.roadblocks
       );
-      this.stores = result.stores;
-      this.destinations = result.destinations;
-      this.tunnels = result.tunnels;
-      this.roadblocks = result.roadblocks;
+      this.gridState.stores = result.stores;
+      this.gridState.destinations = result.destinations;
+      this.gridState.tunnels = result.tunnels;
+      this.gridState.roadblocks = result.roadblocks;
+      this.updateDetailedResults();
 
       // Reset traffic costs to 1 for deleted roadblocks
       deletedRoadblocks.forEach((rb) => {
         const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
         if (
           dirIndex >= 0 &&
-          this.trafficCosts[rb.from.y] &&
-          this.trafficCosts[rb.from.y][rb.from.x]
+          this.gridState.trafficCosts[rb.from.y] &&
+          this.gridState.trafficCosts[rb.from.y][rb.from.x]
         ) {
-          this.trafficCosts[rb.from.y][rb.from.x][dirIndex] = 1;
+          this.gridState.trafficCosts[rb.from.y][rb.from.x][dirIndex] = 1;
         }
       });
-    } else if (this.mode === "add-store") {
-      if (this.stores.length >= 3) {
-        this.error = "Maximum 3 stores allowed";
+    } else if (this.gridState.mode === "add-store") {
+      if (this.gridState.stores.length >= 3) {
+        this.gridState.error = "Maximum 3 stores allowed";
         return;
       }
-      if (!this.gridInteraction.findItemAtPosition(pos, this.stores)) {
-        this.stores.push(pos);
-        this.error = null; // Clear error on successful addition
+      if (
+        !this.gridInteraction.findItemAtPosition(pos, this.gridState.stores)
+      ) {
+        this.gridState.stores.push(pos);
+        this.updateDetailedResults();
+        this.gridState.error = null; // Clear error on successful addition
       }
-    } else if (this.mode === "add-destination") {
-      if (this.destinations.length >= 10) {
-        this.error = "Maximum 10 destinations allowed";
+    } else if (this.gridState.mode === "add-destination") {
+      if (this.gridState.destinations.length >= 10) {
+        this.gridState.error = "Maximum 10 destinations allowed";
         return;
       }
-      if (!this.gridInteraction.findItemAtPosition(pos, this.destinations)) {
-        this.destinations.push(pos);
-        this.error = null; // Clear error on successful addition
+      if (
+        !this.gridInteraction.findItemAtPosition(
+          pos,
+          this.gridState.destinations
+        )
+      ) {
+        this.gridState.destinations.push(pos);
+        this.updateDetailedResults();
+        this.gridState.error = null; // Clear error on successful addition
       }
-    } else if (this.mode === "add-tunnel") {
-      if (this.tunnelStart === null) {
-        this.tunnelStart = pos;
+    } else if (this.gridState.mode === "add-tunnel") {
+      if (this.gridState.tunnelStart === null) {
+        this.gridState.tunnelStart = pos;
       } else {
-        if (this.tunnelStart.x !== pos.x || this.tunnelStart.y !== pos.y) {
-          this.tunnels.push({
-            start: this.tunnelStart,
+        if (
+          this.gridState.tunnelStart.x !== pos.x ||
+          this.gridState.tunnelStart.y !== pos.y
+        ) {
+          this.gridState.tunnels.push({
+            start: this.gridState.tunnelStart,
             end: pos,
           });
+          this.updateDetailedResults();
         }
-        this.tunnelStart = null;
+        this.gridState.tunnelStart = null;
       }
-    } else if (this.mode === "add-cost") {
+    } else if (this.gridState.mode === "add-cost") {
       const wallInfo = this.gridInteraction.detectWallClick(
         x,
         y,
-        this.cellSize,
-        this.gridCols,
-        this.gridRows
+        this.gridState.cellSize,
+        this.gridState.gridCols,
+        this.gridState.gridRows
       );
-      console.log(
-        `🖱️ Add-cost click at canvas coords (${x.toFixed(1)},${y.toFixed(1)})`
-      );
-      console.log(`   Detected wall:`, wallInfo);
       if (wallInfo) {
-        console.log(
-          `   Calling editEdgeCost for (${wallInfo.from.x},${wallInfo.from.y}) ${wallInfo.direction}`
-        );
         this.editEdgeCost(wallInfo.from, wallInfo.direction);
-      } else {
-        console.log(`   No wall detected at this position`);
       }
-    } else if (this.mode === "move") {
-      this.isDraggingCanvas = true;
+    } else if (this.gridState.mode === "move") {
+      this.viewport.setDragging(true);
     }
   }
 
@@ -504,31 +452,24 @@ export class DeliveryPlannerComponent
     const canvas = this.canvasRef.nativeElement;
     this.ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Don't draw anything if grid is not shown yet
-    if (!this.showGrid) {
+    if (!this.gridState.showGrid) {
       return;
     }
 
-    console.log(`Rendering grid with ${this.roadblocks.length} roadblocks...`);
-
-    // Log a sample of roadblock costs before rendering
-    if (this.roadblocks.length > 0) {
-      console.log("Sample roadblock costs before rendering:");
-      this.roadblocks
-        .slice(0, Math.min(3, this.roadblocks.length))
+    if (this.gridState.roadblocks.length > 0) {
+      this.gridState.roadblocks
+        .slice(0, Math.min(3, this.gridState.roadblocks.length))
         .forEach((rb, index) => {
           const dirIndex = ["up", "down", "left", "right"].indexOf(
             rb.direction
           );
           if (
             dirIndex >= 0 &&
-            this.trafficCosts[rb.from.y] &&
-            this.trafficCosts[rb.from.y][rb.from.x]
+            this.gridState.trafficCosts[rb.from.y] &&
+            this.gridState.trafficCosts[rb.from.y][rb.from.x]
           ) {
-            const cost = this.trafficCosts[rb.from.y][rb.from.x][dirIndex];
-            console.log(
-              `  Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction} = cost ${cost}`
-            );
+            const cost =
+              this.gridState.trafficCosts[rb.from.y][rb.from.x][dirIndex];
           }
         });
     }
@@ -537,54 +478,72 @@ export class DeliveryPlannerComponent
     this.ctx.save();
 
     // Apply transformations
-    this.ctx.translate(this.offset.x * this.scale, this.offset.y * this.scale);
-    this.ctx.scale(this.scale, this.scale);
+    const offset = this.viewport.getOffset();
+    const scale = this.viewport.getScale();
+    this.ctx.translate(offset.x * scale, offset.y * scale);
+    this.ctx.scale(scale, scale);
 
     // Draw grid components using renderer service
     this.gridRenderer.drawGridLines(
-      this.gridRows,
-      this.gridCols,
-      this.cellSize
+      this.gridState.gridRows,
+      this.gridState.gridCols,
+      this.gridState.cellSize
     );
-    this.gridRenderer.drawTunnels(this.tunnels, this.cellSize);
+    this.gridRenderer.drawTunnels(
+      this.gridState.tunnels,
+      this.gridState.cellSize
+    );
     this.gridRenderer.drawTrafficCosts(
-      this.trafficCosts,
-      this.gridRows,
-      this.gridCols,
-      this.cellSize
+      this.gridState.trafficCosts,
+      this.gridState.gridRows,
+      this.gridState.gridCols,
+      this.gridState.cellSize
     );
 
     // Draw routes if any
-    if (this.routes.length > 0) {
+    if (this.resultsService.routes.length > 0) {
       this.gridRenderer.drawRoutes(
-        this.routes,
+        this.resultsService.routes,
         this.animationService.isAnimationActive(),
         this.animationService.getCurrentRoute(),
-        this.cellSize
+        this.animationService.getCurrentStep(),
+        this.gridState.cellSize
       );
     }
 
-    this.gridRenderer.drawStores(this.stores, this.cellSize);
-    this.gridRenderer.drawDestinations(this.destinations, this.cellSize);
+    this.gridRenderer.drawStores(
+      this.gridState.stores,
+      this.gridState.cellSize
+    );
+    this.gridRenderer.drawDestinations(
+      this.gridState.destinations,
+      this.gridState.cellSize
+    );
     this.gridRenderer.drawRoadblocks(
-      this.roadblocks,
-      this.gridRows,
-      this.gridCols,
-      this.cellSize,
-      this.trafficCosts
+      this.gridState.roadblocks,
+      this.gridState.gridRows,
+      this.gridState.gridCols,
+      this.gridState.cellSize,
+      this.gridState.trafficCosts
     );
 
     // Draw tunnel start indicator if in tunnel mode
-    if (this.mode === "add-tunnel") {
+    if (this.gridState.mode === "add-tunnel") {
       this.gridRenderer.drawTunnelStartIndicator(
-        this.tunnelStart,
-        this.cellSize
+        this.gridState.tunnelStart,
+        this.gridState.cellSize
       );
     }
 
     // Draw animated truck if animation is active
-    if (this.animationService.isAnimationActive() && this.truckPosition) {
-      this.gridRenderer.drawTruck(this.truckPosition, this.cellSize);
+    if (
+      this.animationService.isAnimationActive() &&
+      this.resultsService.truckPosition
+    ) {
+      this.gridRenderer.drawTruck(
+        this.resultsService.truckPosition,
+        this.gridState.cellSize
+      );
     }
 
     // Restore context
@@ -592,23 +551,15 @@ export class DeliveryPlannerComponent
   }
 
   generateRandomGrid(): void {
-    this.resetGrid();
-    if (!this.showGrid) {
-      this.showGrid = true;
+    this.gridState.resetGrid();
+    if (!this.gridState.showGrid) {
+      this.gridState.showGrid = true;
       this.centerGrid();
     }
 
     const result = this.gridGenerator.generateRandomGrid(
-      this.gridRows,
-      this.gridCols
-    );
-
-    console.log("=== COMPONENT RECEIVING GENERATED DATA ===");
-    console.log(
-      `Received ${result.roadblocks.length} roadblocks from generator`
-    );
-    console.log(
-      `Received trafficCosts dimensions: ${result.trafficCosts.length}x${result.trafficCosts[0]?.length}x${result.trafficCosts[0]?.[0]?.length}`
+      this.gridState.gridRows,
+      this.gridState.gridCols
     );
 
     // Verify roadblocks in received data
@@ -617,474 +568,264 @@ export class DeliveryPlannerComponent
       const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
       const actualCost = result.trafficCosts[rb.from.y][rb.from.x][dirIndex];
       if (actualCost !== 0) {
-        console.error(
-          `❌ COMPONENT: Roadblock ${index} at (${rb.from.x},${rb.from.y}) ${rb.direction} has cost ${actualCost} instead of 0!`
-        );
         componentInvalidRoadblocks++;
       }
     });
 
-    this.stores = result.stores;
-    this.destinations = result.destinations;
-    this.tunnels = result.tunnels;
-    this.roadblocks = result.roadblocks;
-    this.trafficCosts = result.trafficCosts;
-
-    console.log(`Component invalid roadblocks: ${componentInvalidRoadblocks}`);
-    console.log("=== CALLING ENFORCE ROADBLOCK COSTS ===");
+    this.gridState.stores = result.stores;
+    this.gridState.destinations = result.destinations;
+    this.gridState.tunnels = result.tunnels;
+    this.gridState.roadblocks = result.roadblocks;
+    this.gridState.trafficCosts = result.trafficCosts;
 
     // Ensure all roadblocks have cost 0 in traffic costs
-    this.enforceRoadblockCosts();
+    this.gridState.enforceRoadblockCosts();
 
-    console.log("=== COMPONENT DATA ASSIGNMENT COMPLETE ===");
-  }
-
-  // Ensure all roadblocks have traffic cost of 0
-  private enforceRoadblockCosts(): void {
-    console.log(
-      `Enforcing roadblock costs for ${this.roadblocks.length} roadblocks...`
-    );
-
-    // First, normalize any roadblocks that might be stored with inconsistent coordinates
-    this.normalizeRoadblocks();
-
-    let fixedCount = 0;
-    let alreadyCorrectCount = 0;
-
-    this.roadblocks.forEach((rb, index) => {
-      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
-      if (
-        dirIndex >= 0 &&
-        this.trafficCosts[rb.from.y] &&
-        this.trafficCosts[rb.from.y][rb.from.x]
-      ) {
-        const currentCost = this.trafficCosts[rb.from.y][rb.from.x][dirIndex];
-        const expectedCost = 0; // Roadblocks should always have cost 0
-
-        console.log(
-          `🔍 Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction}`
-        );
-        console.log(`   Current cost (trafficCosts array): ${currentCost}`);
-        console.log(`   Expected cost (blocked road): ${expectedCost}`);
-        console.log(
-          `   Match: ${currentCost === expectedCost ? "✅ YES" : "❌ NO"}`
-        );
-
-        if (currentCost !== expectedCost) {
-          this.trafficCosts[rb.from.y][rb.from.x][dirIndex] = expectedCost;
-          console.log(
-            `   🔧 Fixed: Changed cost from ${currentCost} to ${expectedCost}`
-          );
-          fixedCount++;
-        } else {
-          alreadyCorrectCount++;
-        }
-      } else {
-        console.error(
-          `❌ Invalid roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction} - out of bounds or invalid direction`
-        );
-      }
-    });
-
-    console.log(
-      `Enforce results: ${fixedCount} fixed, ${alreadyCorrectCount} already correct, ${
-        this.roadblocks.length - fixedCount - alreadyCorrectCount
-      } invalid`
-    );
-
-    // Final verification after enforcement
-    let postEnforceInvalid = 0;
-    this.roadblocks.forEach((rb) => {
-      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
-      if (
-        dirIndex >= 0 &&
-        this.trafficCosts[rb.from.y] &&
-        this.trafficCosts[rb.from.y][rb.from.x]
-      ) {
-        const cost = this.trafficCosts[rb.from.y][rb.from.x][dirIndex];
-        if (cost !== 0) {
-          console.error(
-            `❌ POST-ENFORCE ERROR: Roadblock at (${rb.from.x},${rb.from.y}) ${rb.direction} still has cost ${cost}!`
-          );
-          postEnforceInvalid++;
-        }
-      }
-    });
-
-    if (postEnforceInvalid === 0) {
-      console.log(`✅ All roadblocks now have cost 0 after enforcement`);
-    } else {
-      console.error(
-        `❌ ${postEnforceInvalid} roadblocks still have incorrect costs after enforcement!`
-      );
-    }
-  }
-
-  // Normalize roadblock coordinates to ensure consistent representation
-  private normalizeRoadblocks(): void {
-    console.log(`Normalizing ${this.roadblocks.length} roadblocks...`);
-    let normalizedCount = 0;
-
-    this.roadblocks = this.roadblocks.map((rb) => {
-      let normalized = { ...rb };
-
-      // For vertical walls (left/right), ensure we use "right" direction from left cell
-      if (rb.direction === "left" && rb.from.x > 0) {
-        // Convert "left" wall of cell (x,y) to "right" wall of cell (x-1,y)
-        normalized = {
-          from: { x: rb.from.x - 1, y: rb.from.y },
-          direction: "right" as const,
-        };
-        normalizedCount++;
-        console.log(
-          `   Normalized: (${rb.from.x},${rb.from.y}) left → (${normalized.from.x},${normalized.from.y}) right`
-        );
-      }
-      // For horizontal walls (up/down), ensure we use "down" direction from top cell
-      else if (rb.direction === "up" && rb.from.y > 0) {
-        // Convert "up" wall of cell (x,y) to "down" wall of cell (x,y-1)
-        normalized = {
-          from: { x: rb.from.x, y: rb.from.y - 1 },
-          direction: "down" as const,
-        };
-        normalizedCount++;
-        console.log(
-          `   Normalized: (${rb.from.x},${rb.from.y}) up → (${normalized.from.x},${normalized.from.y}) down`
-        );
-      }
-
-      return normalized;
-    });
-
-    // Remove duplicates that might have been created by normalization
-    const uniqueRoadblocks = this.roadblocks.filter((rb, index, arr) => {
-      return (
-        arr.findIndex(
-          (other) =>
-            other.from.x === rb.from.x &&
-            other.from.y === rb.from.y &&
-            other.direction === rb.direction
-        ) === index
-      );
-    });
-
-    if (uniqueRoadblocks.length !== this.roadblocks.length) {
-      console.log(
-        `   Removed ${
-          this.roadblocks.length - uniqueRoadblocks.length
-        } duplicate roadblocks`
-      );
-      this.roadblocks = uniqueRoadblocks;
-    }
-
-    console.log(
-      `Normalization complete: ${normalizedCount} roadblocks normalized, ${this.roadblocks.length} total roadblocks`
-    );
+    // Update detailed results
+    this.updateDetailedResults();
   }
 
   // Animation methods using service
   startRouteAnimation(): void {
-    this.animationService.startRouteAnimation(this.routes);
+    this.animationService.startRouteAnimation(this.resultsService.routes);
   }
 
   stopRouteAnimation(): void {
     this.animationService.stopRouteAnimation();
-    this.truckPosition = null;
+    this.resultsService.setTruckPosition(null);
     this.renderGrid();
   }
 
   resetAnimation(): void {
     this.animationService.resetAnimation();
-    this.truckPosition = null;
+    this.resultsService.setTruckPosition(null);
   }
 
   animateSpecificRoute(routeIndex: number): void {
-    this.animationService.animateSpecificRoute(routeIndex, this.routes);
+    this.animationService.animateSpecificRoute(
+      routeIndex,
+      this.resultsService.routes
+    );
   }
 
   // Animation callbacks
   private onAnimationPositionUpdate(route: number, step: number): void {
-    if (route < this.routes.length && step < this.routes[route].path.length) {
-      this.truckPosition = this.routes[route].path[step];
+    if (
+      route < this.resultsService.routes.length &&
+      step < this.resultsService.routes[route].path.length
+    ) {
+      this.resultsService.setTruckPosition(
+        this.resultsService.routes[route].path[step]
+      );
       this.renderGrid();
     }
   }
 
   private onAnimationComplete(): void {
-    this.truckPosition = null;
+    this.resultsService.setTruckPosition(null);
     this.renderGrid();
   }
 
+  private onRouteComplete(routeIndex: number): void {
+    // When a route is complete, immediately move truck back to the store
+    if (routeIndex < this.resultsService.routes.length) {
+      const completedRoute = this.resultsService.routes[routeIndex];
+      this.resultsService.setTruckPosition(completedRoute.store);
+      this.renderGrid();
+    }
+  }
+
   // Grid management methods
-  setMode(mode: typeof this.mode): void {
-    this.mode = mode;
-    this.tunnelStart = null;
-    this.error = null; // Clear any previous error messages
-    // Reset cost editing states when switching modes
-    this.isEditingCellCost = false;
-    this.isEditingEdgeCost = false;
-    if (!this.showGrid) {
-      this.showGrid = true;
+  setMode(mode: typeof this.gridState.mode): void {
+    this.gridState.setMode(mode);
+    this.costEditing.isEditingCellCost = false;
+    this.costEditing.isEditingEdgeCost = false;
+    if (!this.gridState.showGrid) {
+      this.gridState.showGrid = true;
       this.centerGrid();
     }
   }
 
   resetView(): void {
-    this.scale = 1;
-    this.offset = { x: 0, y: 0 };
+    this.viewport.resetView();
   }
 
   resetGrid(): void {
-    this.stores = [];
-    this.destinations = [];
-    this.tunnels = [];
-    this.roadblocks = [];
-    this.routes = [];
-    this.error = null;
-    this.initializeTrafficCosts();
+    this.gridState.resetGrid();
+    this.resultsService.clearResults();
+    this.stopRouteAnimation();
+  }
+
+  clearResults(): void {
+    this.resultsService.clearResults();
+    this.gridState.error = null;
+    this.updateDetailedResults();
+    this.stopRouteAnimation();
+  }
+
+  getCurrentAlgorithmRoutes(): DeliveryRoute[] {
+    return this.resultsService.getCurrentAlgorithmRoutes(
+      this.gridState.selectedStrategy
+    );
+  }
+
+  isRouteActive(route: DeliveryRoute): boolean {
+    return (
+      this.animationService.isAnimationActive() &&
+      this.animationService.getCurrentRoute() <
+        this.resultsService.routes.length &&
+      this.resultsService.routes[this.animationService.getCurrentRoute()] ===
+        route
+    );
+  }
+
+  animateRouteForCurrentAlgorithm(routeIndex: number): void {
+    const currentAlgoRoutes = this.getCurrentAlgorithmRoutes();
+    if (routeIndex < currentAlgoRoutes.length) {
+      const route = currentAlgoRoutes[routeIndex];
+      // Find the index of this route in the combined routes array
+      const globalIndex = this.resultsService.routes.indexOf(route);
+      if (globalIndex >= 0) {
+        this.animateSpecificRoute(globalIndex);
+      }
+    }
+  }
+
+  onStrategyChange(): void {
+    // Update detailed results when strategy changes
+    this.updateDetailedResults();
   }
 
   onGridSizeChange(): void {
-    // Validate grid size
-    if (this.gridRows < 3 || this.gridRows > 20) {
-      this.gridRows = Math.max(3, Math.min(20, this.gridRows));
-    }
-    if (this.gridCols < 3 || this.gridCols > 20) {
-      this.gridCols = Math.max(3, Math.min(20, this.gridCols));
-    }
-
-    // Clear existing data that might be outside the new grid bounds
-    this.stores = this.stores.filter(
-      (s) => s.x < this.gridCols && s.y < this.gridRows
-    );
-    this.destinations = this.destinations.filter(
-      (d) => d.x < this.gridCols && d.y < this.gridRows
-    );
-    this.tunnels = this.tunnels.filter(
-      (t) =>
-        t.start.x < this.gridCols &&
-        t.start.y < this.gridRows &&
-        t.end.x < this.gridCols &&
-        t.end.y < this.gridRows
-    );
-    this.roadblocks = this.roadblocks.filter(
-      (rb) => rb.from.x < this.gridCols && rb.from.y < this.gridRows
-    );
-
-    // Clear routes when grid changes
-    this.routes = [];
-    this.error = null;
-
-    // Reinitialize traffic costs with new dimensions
-    this.initializeTrafficCosts();
-
-    // Ensure roadblocks have cost 0 after resizing
-    this.roadblocks.forEach((rb) => {
-      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
-      if (
-        dirIndex >= 0 &&
-        this.trafficCosts[rb.from.y] &&
-        this.trafficCosts[rb.from.y][rb.from.x]
-      ) {
-        this.trafficCosts[rb.from.y][rb.from.x][dirIndex] = 0;
-      }
-    });
-
-    // Re-center the grid
+    this.gridState.onGridSizeChange();
+    this.resultsService.routes = [];
     this.centerGrid();
-
-    // Update canvas size
     this.resizeCanvas();
+    this.updateDetailedResults();
   }
 
   editCellCost(pos: Position): void {
-    this.editingCellPosition = pos;
-    this.editingCellCosts = [...this.trafficCosts[pos.y][pos.x]];
-    this.isEditingCellCost = true;
+    this.costEditing.editCellCost(pos, this.gridState.trafficCosts);
   }
 
   saveCellCost(): void {
-    if (this.editingCellPosition) {
-      this.trafficCosts[this.editingCellPosition.y][
-        this.editingCellPosition.x
-      ] = [...this.editingCellCosts];
-      this.routes = [];
-      this.renderGrid();
-    }
-    this.cancelCellCostEdit();
+    this.costEditing.saveCellCost(this.gridState.trafficCosts);
+    this.resultsService.routes = [];
+    this.renderGrid();
+    this.updateDetailedResults();
   }
 
   cancelCellCostEdit(): void {
-    this.isEditingCellCost = false;
-    this.editingCellPosition = null;
+    this.costEditing.cancelCellCostEdit();
   }
 
   editEdgeCost(from: Position, direction: string): void {
-    // Check if there's a roadblock for this direction - if so, don't allow editing
-    const hasRoadblock = this.roadblocks.some(
-      (rb) =>
-        rb.from.x === from.x &&
-        rb.from.y === from.y &&
-        rb.direction === direction
+    const error = this.costEditing.editEdgeCost(
+      from,
+      direction,
+      this.gridState.trafficCosts,
+      this.gridState.roadblocks
     );
-
-    console.log(`🔍 Roadblock check for (${from.x},${from.y}) ${direction}:`);
-    console.log(`   Total roadblocks: ${this.roadblocks.length}`);
-    this.roadblocks.forEach((rb, index) => {
-      console.log(
-        `   Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction}`
-      );
-    });
-    console.log(`   Exact match found: ${hasRoadblock}`);
-
-    if (hasRoadblock) {
-      this.error =
-        "Cannot change cost for blocked roads. Remove the roadblock first.";
-      return;
+    if (error) {
+      this.gridState.error = error;
     }
-
-    const dirIndex = ["up", "down", "left", "right"].indexOf(direction);
-    const currentCost = this.trafficCosts[from.y][from.x][dirIndex];
-
-    console.log(
-      `📝 editEdgeCost called for (${from.x},${from.y}) ${direction}`
-    );
-    console.log(`   dirIndex: ${dirIndex}`);
-    console.log(
-      `   Array access: trafficCosts[${from.y}][${from.x}][${dirIndex}] = ${currentCost}`
-    );
-    console.log(`   Has roadblock: ${hasRoadblock}`);
-
-    this.editingEdgeFrom = from;
-    this.editingEdgeDirection = direction;
-    this.editingEdgeCost = currentCost;
-    this.isEditingEdgeCost = true;
   }
 
   saveEdgeCost(): void {
-    if (this.editingEdgeFrom) {
-      // Validate cost is between 1-4
-      if (this.editingEdgeCost < 1 || this.editingEdgeCost > 4) {
-        this.error = "Edge cost must be between 1 and 4";
-        return;
-      }
-
-      const dirIndex = ["up", "down", "left", "right"].indexOf(
-        this.editingEdgeDirection
-      );
-      this.trafficCosts[this.editingEdgeFrom.y][this.editingEdgeFrom.x][
-        dirIndex
-      ] = this.editingEdgeCost;
-
-      // If we set a cost > 0, remove any roadblock for this direction
-      if (this.editingEdgeCost > 0) {
-        this.roadblocks = this.roadblocks.filter(
-          (rb) =>
-            !(
-              rb.from.x === this.editingEdgeFrom!.x &&
-              rb.from.y === this.editingEdgeFrom!.y &&
-              rb.direction === this.editingEdgeDirection
-            )
-        );
-      }
-
-      this.routes = [];
-      this.renderGrid();
+    const result = this.costEditing.saveEdgeCost(
+      this.gridState.trafficCosts,
+      this.gridState.roadblocks
+    );
+    if (result.error) {
+      this.gridState.error = result.error;
+      return;
     }
-    this.cancelEdgeCostEdit();
+    this.gridState.roadblocks = result.roadblocks;
+    this.resultsService.routes = [];
+    this.renderGrid();
+    this.updateDetailedResults();
   }
 
   cancelEdgeCostEdit(): void {
-    this.isEditingEdgeCost = false;
-    this.editingEdgeFrom = null;
-    this.editingEdgeDirection = "";
+    this.costEditing.cancelEdgeCostEdit();
   }
 
   // Missing methods for HTML template
   async planDelivery(): Promise<void> {
-    console.log("=== Starting planDelivery ===");
-
-    if (this.stores.length === 0) {
-      this.error = "Please add at least one store";
-      console.error("No stores added");
+    if (this.gridState.stores.length === 0) {
+      this.gridState.error = "Please add at least one store";
       return;
     }
 
-    if (this.destinations.length === 0) {
-      this.error = "Please add at least one destination";
-      console.error("No destinations added");
+    if (this.gridState.destinations.length === 0) {
+      this.gridState.error = "Please add at least one destination";
       return;
     }
 
-    console.log(
-      `Stores: ${this.stores.length}, Destinations: ${this.destinations.length}`
-    );
-    console.log("Stores:", this.stores);
-    console.log("Destinations:", this.destinations);
-    console.log("Strategy:", this.selectedStrategy);
-
-    this.isLoading = true;
-    this.error = null;
-    this.routes = [];
+    this.gridState.isLoading = true;
+    this.gridState.error = null;
+    // Don't clear routes here - we want to accumulate results
 
     try {
       const gridConfig = {
-        rows: this.gridRows,
-        cols: this.gridCols,
-        traffic: this.trafficCosts,
-        stores: this.stores,
-        destinations: this.destinations,
-        tunnels: this.tunnels,
-        roadblocks: this.roadblocks,
+        rows: this.gridState.gridRows,
+        cols: this.gridState.gridCols,
+        traffic: this.gridState.trafficCosts,
+        stores: this.gridState.stores,
+        destinations: this.gridState.destinations,
+        tunnels: this.gridState.tunnels,
+        roadblocks: this.gridState.roadblocks,
       };
 
-      console.log("Sending request to backend with config:", gridConfig);
-
-      const backendStrategy = this.mapStrategyToBackend(this.selectedStrategy);
-      console.log(`Strategy: ${this.selectedStrategy} → ${backendStrategy}`);
+      const backendStrategy = this.resultsService.mapStrategyToBackend(
+        this.gridState.selectedStrategy
+      );
 
       const response = await this.deliveryService
         .planDelivery(gridConfig, backendStrategy)
         .toPromise();
 
-      console.log("Received response from backend:", response);
-
       if (response && response.success) {
-        this.routes = response.routes || [];
-        console.log(`Found ${this.routes.length} routes`);
+        const newRoutes = response.routes || [];
 
-        if (this.routes.length === 0) {
-          this.error = "No routes found. Check if destinations are reachable.";
+        if (newRoutes.length === 0) {
+          this.gridState.error =
+            "No routes found. Check if destinations are reachable.";
         } else {
+          // Store results for this algorithm
+          this.resultsService.addAlgorithmResults(
+            this.gridState.selectedStrategy,
+            newRoutes
+          );
+
+          // Update detailed results with planning info
+          this.updateDetailedResults();
           // Start animating routes
           this.startRouteAnimation();
         }
       } else {
-        this.error = response?.message || "Planning failed";
-        console.error("Planning failed:", response?.message);
+        this.gridState.error = response?.message || "Planning failed";
       }
     } catch (err: any) {
-      this.error = `Error: ${err.message || "Unknown error"}`;
-      console.error("Planning error:", err);
-      console.error("Error details:", err.error);
-      console.error("Error status:", err.status);
+      this.gridState.error = `Error: ${err.message || "Unknown error"}`;
     } finally {
-      this.isLoading = false;
-      console.log("=== Finished planDelivery ===");
+      this.gridState.isLoading = false;
     }
   }
 
-  exportGrid(): void {
-    const gridData = {
-      rows: this.gridRows,
-      cols: this.gridCols,
-      stores: this.stores,
-      destinations: this.destinations,
-      tunnels: this.tunnels,
-      roadblocks: this.roadblocks,
-      trafficCosts: this.trafficCosts,
-    };
+  private updateDetailedResults(): void {
+    this.resultsService.updateDetailedResults(
+      this.gridState.gridCols,
+      this.gridState.gridRows,
+      this.gridState.stores.length,
+      this.gridState.destinations.length,
+      this.gridState.tunnels.length,
+      this.gridState.roadblocks.length
+    );
+  }
 
+  exportGrid(): void {
+    const gridData = this.gridState.exportGrid();
     const dataStr = JSON.stringify(gridData, null, 2);
     const dataBlob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(dataBlob);
@@ -1107,40 +848,15 @@ export class DeliveryPlannerComponent
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        this.gridRows = data.rows || 10;
-        this.gridCols = data.cols || 10;
-        this.stores = data.stores || [];
-        this.destinations = data.destinations || [];
-        this.tunnels = data.tunnels || [];
-        this.roadblocks = data.roadblocks || [];
-        this.trafficCosts = data.trafficCosts || [];
-
-        if (this.trafficCosts.length === 0) {
-          this.initializeTrafficCosts();
-        }
-
-        // Ensure roadblocks have cost 0
-        this.roadblocks.forEach((rb) => {
-          const dirIndex = ["up", "down", "left", "right"].indexOf(
-            rb.direction
-          );
-          if (
-            dirIndex >= 0 &&
-            this.trafficCosts[rb.from.y] &&
-            this.trafficCosts[rb.from.y][rb.from.x]
-          ) {
-            this.trafficCosts[rb.from.y][rb.from.x][dirIndex] = 0;
-          }
-        });
-
-        this.routes = [];
-        this.error = null;
-        if (!this.showGrid) {
-          this.showGrid = true;
+        this.gridState.importGrid(data);
+        this.resultsService.routes = [];
+        if (!this.gridState.showGrid) {
+          this.gridState.showGrid = true;
           this.centerGrid();
         }
+        this.updateDetailedResults();
       } catch (err) {
-        this.error = "Invalid grid file format";
+        this.gridState.error = "Invalid grid file format";
         console.error("Import error:", err);
       }
     };
@@ -1153,34 +869,13 @@ export class DeliveryPlannerComponent
   get isAnimating(): boolean {
     return this.animationService.isAnimating;
   }
-
   get currentAnimatingRoute(): number {
     return this.animationService.currentAnimatingRoute;
   }
-
   get animationSpeed(): number {
     return this.animationService.animationSpeed;
   }
-
   set animationSpeed(value: number) {
     this.animationService.animationSpeed = value;
-  }
-
-  // Map display strategy names to backend codes
-  private mapStrategyToBackend(displayStrategy: string): string {
-    switch (displayStrategy) {
-      case "BFS":
-        return "BF";
-      case "DFS":
-        return "DF";
-      case "UCS":
-        return "UC";
-      case "AStar":
-        return "AS1";
-      case "Greedy":
-        return "G1";
-      default:
-        return "BF"; // default fallback
-    }
   }
 }

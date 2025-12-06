@@ -49,7 +49,6 @@ public class Grid {
         if (isTunnelEntrance(s))
             actions.add("tunnel");
 
-        System.out.println("DEBUG: Possible actions from " + s.x + "," + s.y + ": " + actions);
         return actions;
     }
 

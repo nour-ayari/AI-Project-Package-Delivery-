@@ -32,6 +32,7 @@ export interface DeliveryRoute {
   destination: Position;
   path: Position[];
   cost: number;
+  expanded: number;
 }
 
 export interface PlanningResponse {
@@ -52,8 +53,6 @@ export class DeliveryPlannerService {
     grid: GridConfig,
     strategy: string
   ): Observable<PlanningResponse> {
-    console.log("Planning delivery with strategy:", strategy);
-    console.log("Grid config:", grid);
     return this.http.post<PlanningResponse>(`${this.apiUrl}/plan`, {
       grid,
       strategy,

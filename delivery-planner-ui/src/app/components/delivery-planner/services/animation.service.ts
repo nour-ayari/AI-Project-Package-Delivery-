@@ -12,13 +12,16 @@ export class AnimationService {
   // Callbacks
   private onPositionUpdate?: (route: number, step: number) => void;
   private onAnimationComplete?: () => void;
+  private onRouteComplete?: (route: number) => void;
 
   setCallbacks(
     onPositionUpdate: (route: number, step: number) => void,
-    onAnimationComplete: () => void
+    onAnimationComplete: () => void,
+    onRouteComplete?: (route: number) => void
   ): void {
     this.onPositionUpdate = onPositionUpdate;
     this.onAnimationComplete = onAnimationComplete;
+    this.onRouteComplete = onRouteComplete;
   }
 
   setAnimationSpeed(speed: number): void {
@@ -98,14 +101,19 @@ export class AnimationService {
         `Route ${this.currentAnimatingRoute + 1}/${routes.length} complete`
       );
 
+      // Notify that route is complete (truck should return to store)
+      if (this.onRouteComplete) {
+        this.onRouteComplete(this.currentAnimatingRoute);
+      }
+
       // Move to next route
       this.currentAnimatingRoute++;
       this.currentAnimatingStep = 0;
 
-      // Pause between routes
+      // Short pause between routes (reduced from 1000ms to 500ms)
       this.animationTimer = setTimeout(() => {
         this.animateNextStep(routes);
-      }, 1000); // 1 second pause between routes
+      }, 500); // 0.5 second pause between routes
 
       return;
     }
@@ -136,6 +144,12 @@ export class AnimationService {
     // Check if current route is complete
     if (this.currentAnimatingStep >= currentRoute.path.length) {
       console.log(`Route ${this.currentAnimatingRoute + 1} animation complete`);
+
+      // Notify that route is complete (truck should return to store)
+      if (this.onRouteComplete) {
+        this.onRouteComplete(this.currentAnimatingRoute);
+      }
+
       this.stopRouteAnimation();
       return;
     }

@@ -59,7 +59,6 @@ public class DeliveryPlannerController {
                 
                 if (bestStore != null) {
                     assignment.put(dest, bestStore);
-                    System.out.println("Assigned destination " + dest + " to store " + bestStore + " with cost " + bestCost);
                 }
             }
             
@@ -67,7 +66,6 @@ public class DeliveryPlannerController {
             List<PlanningResponse.DeliveryRoute> routes = new ArrayList<>();
 
             for (State store : grid.stores) {
-                System.out.println("Planning routes for store " + store);
                 
                 // Collect destinations assigned to this store
                 List<State> assignedDestinations = new ArrayList<>();
@@ -77,8 +75,6 @@ public class DeliveryPlannerController {
                         assignedDestinations.add(dest);
                     }
                 }
-                
-                System.out.println("Store " + store + " has " + assignedDestinations.size() + " assigned destinations");
                 
                 // Plan routes to assigned destinations
                 for (State dest : assignedDestinations) {
@@ -95,10 +91,9 @@ public class DeliveryPlannerController {
                                 new GridConfig.Position(store.x, store.y),
                                 new GridConfig.Position(dest.x, dest.y),
                                 path,
-                                result.cost);
+                                result.cost,
+                                result.nodesExpanded);
                         routes.add(route);
-                        
-                        System.out.println("Created route from " + store + " to " + dest + " with cost " + result.cost);
                     }
                 }
             }
@@ -162,7 +157,6 @@ public class DeliveryPlannerController {
 
         // Add roadblocks
         if (config.getRoadblocks() != null) {
-            System.out.println("DEBUG: Processing " + config.getRoadblocks().size() + " roadblocks");
             for (GridConfig.RoadBlockConfig rb : config.getRoadblocks()) {
                 State from = new State(rb.getFrom().getX(), rb.getFrom().getY());
                 State to = null;
@@ -194,7 +188,6 @@ public class DeliveryPlannerController {
                     grid.blockedRoads.add(new RoadBlock(from, to));
                 }
             }
-            System.out.println("DEBUG: Total roadblocks in grid: " + grid.blockedRoads.size());
         }
 
         return grid;
