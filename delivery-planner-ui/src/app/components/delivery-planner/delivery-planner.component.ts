@@ -1040,8 +1040,11 @@ export class DeliveryPlannerComponent
 
       console.log("Sending request to backend with config:", gridConfig);
 
+      const backendStrategy = this.mapStrategyToBackend(this.selectedStrategy);
+      console.log(`Strategy: ${this.selectedStrategy} → ${backendStrategy}`);
+
       const response = await this.deliveryService
-        .planDelivery(gridConfig, this.selectedStrategy)
+        .planDelivery(gridConfig, backendStrategy)
         .toPromise();
 
       console.log("Received response from backend:", response);
@@ -1161,5 +1164,23 @@ export class DeliveryPlannerComponent
 
   set animationSpeed(value: number) {
     this.animationService.animationSpeed = value;
+  }
+
+  // Map display strategy names to backend codes
+  private mapStrategyToBackend(displayStrategy: string): string {
+    switch (displayStrategy) {
+      case "BFS":
+        return "BF";
+      case "DFS":
+        return "DF";
+      case "UCS":
+        return "UC";
+      case "AStar":
+        return "AS1";
+      case "Greedy":
+        return "G1";
+      default:
+        return "BF"; // default fallback
+    }
   }
 }
