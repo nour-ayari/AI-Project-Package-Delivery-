@@ -1,22 +1,23 @@
-package code ;
-public class RoadBlock {
-    public State s;
-    public String action;
+package code;
 
-    public RoadBlock(State s, String action) {
-        this.s = s;
-        this.action = action;
+public class RoadBlock {
+    public final State A, B;
+
+    public RoadBlock(State A, State B) {
+        this.A = A;
+        this.B = B;
     }
 
     @Override
     public boolean equals(Object o) {
+        if (this == o) return true;
         if (!(o instanceof RoadBlock)) return false;
-        RoadBlock r = (RoadBlock) o;
-        return s.equals(r.s) && action.equals(r.action);
+        RoadBlock rb = (RoadBlock) o;
+        // Blocked in either direction
+        return (A.equals(rb.A) && B.equals(rb.B)) || (A.equals(rb.B) && B.equals(rb.A));
     }
-
-    @Override
+   @Override
     public int hashCode() {
-        return s.hashCode() + action.hashCode();
+        return A.hashCode() + B.hashCode(); // order-independent
     }
 }
