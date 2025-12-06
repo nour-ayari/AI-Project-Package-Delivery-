@@ -114,7 +114,7 @@ public class Grid {
     public int getTunnelCost(State s) {
         for (Tunnel t : tunnels) {
             if (t.A.equals(s) || t.B.equals(s))
-                return t.cost > 0 ? t.cost : manhattan(t.A, t.B);
+                return manhattan(t.A, t.B);
         }
         return 0;
     }
