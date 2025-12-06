@@ -1,6 +1,9 @@
 package code;
 
 import java.util.*;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.ThreadMXBean;
 
 public class DeliveryPlanner {
 
@@ -9,6 +12,18 @@ public class DeliveryPlanner {
     // ======================================================================
     public static String plan(String initialState, String traffic, String strategy, boolean visualize) {
 
+        // Performance monitoring setup
+        MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
+        
+        // Force garbage collection before measurement
+        System.gc();
+        try { Thread.sleep(50); } catch (InterruptedException e) {}
+        
+        long memoryBefore = memoryBean.getHeapMemoryUsage().getUsed();
+        long cpuBefore = threadBean.getCurrentThreadCpuTime();
+        long timeBefore = System.currentTimeMillis();
+        
         // 1) Parse Grid from strings
         Grid grid = parseGrid(initialState, traffic);
         // 2) Optional UI
@@ -118,8 +133,48 @@ public class DeliveryPlanner {
             }
             output.append("\n");
         }
-        ui.log(output.toString());
+        
+        // Calculate performance metrics
+        long timeAfter = System.currentTimeMillis();
+        long cpuAfter = threadBean.getCurrentThreadCpuTime();
+        long memoryAfter = memoryBean.getHeapMemoryUsage().getUsed();
+        
+        long executionTimeMs = timeAfter - timeBefore;
+        long cpuTimeMs = (cpuAfter - cpuBefore) / 1_000_000;
+        long memoryUsedKB = Math.max(0, (memoryAfter - memoryBefore) / 1024);
+        
+        // Print performance summary to console
+        System.out.println("\n" + "=".repeat(80));
+        System.out.println("PERFORMANCE METRICS - " + getAlgorithmName(strategy));
+        System.out.println("=".repeat(80));
+        System.out.println("Grid Size      : " + grid.rows + "x" + grid.cols);
+        System.out.println("Stores         : " + grid.stores.size());
+        System.out.println("Destinations   : " + grid.destinations.size());
+        System.out.println("Algorithm      : " + getAlgorithmName(strategy));
+        System.out.println("-".repeat(80));
+        System.out.println("RAM Usage      : " + memoryUsedKB + " KB");
+        System.out.println("CPU Time       : " + cpuTimeMs + " ms");
+        System.out.println("Execution Time : " + executionTimeMs + " ms");
+        System.out.println("=".repeat(80));
+        
+        if (visualize && ui != null) {
+            ui.log(output.toString());
+        }
         return output.toString();
+    }
+    
+    private static String getAlgorithmName(String strategy) {
+        switch (strategy.toUpperCase()) {
+            case "BF": return "Breadth-First Search (BFS)";
+            case "DF": return "Depth-First Search (DFS)";
+            case "UC": return "Uniform Cost Search (UCS)";
+            case "ID": return "Iterative Deepening (ID)";
+            case "G1": case "GR1": return "Greedy Search (Heuristic 1 - Manhattan)";
+            case "G2": case "GR2": return "Greedy Search (Heuristic 2 - Traffic-aware)";
+            case "AS1": return "A* Search (Heuristic 1 - Manhattan)";
+            case "AS2": return "A* Search (Heuristic 2 - Traffic-aware)";
+            default: return strategy;
+        }
     }
 
     // ======================================================================
