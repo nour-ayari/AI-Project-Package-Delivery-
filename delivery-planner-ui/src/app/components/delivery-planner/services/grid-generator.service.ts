@@ -145,63 +145,6 @@ export class GridGeneratorService {
       }
     }
 
-    // Final verification: ensure all roadblocks have cost 0
-    console.log("=== FINAL ROADBLOCK VERIFICATION ===");
-    console.log(`Total roadblocks generated: ${roadblocks.length}`);
-    let invalidRoadblocks = 0;
-    roadblocks.forEach((rb, index) => {
-      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
-      const actualCost = trafficCosts[rb.from.y][rb.from.x][dirIndex];
-      console.log(
-        `Roadblock ${index}: (${rb.from.x},${rb.from.y}) ${rb.direction} -> cost: ${actualCost}`
-      );
-      if (actualCost !== 0) {
-        console.error(
-          `❌ ERROR: Roadblock at (${rb.from.x},${rb.from.y}) ${rb.direction} has cost ${actualCost} instead of 0!`
-        );
-        invalidRoadblocks++;
-      }
-    });
-
-    // Also check for any cells that have cost 0 but no roadblock (shouldn't happen)
-    let orphanedZeroCosts = 0;
-    for (let y = 0; y < gridRows; y++) {
-      for (let x = 0; x < gridCols; x++) {
-        for (let dir = 0; dir < 4; dir++) {
-          const cost = trafficCosts[y][x][dir];
-          if (cost === 0) {
-            const directionName = ["up", "down", "left", "right"][dir];
-            const hasRoadblock = roadblocks.some(
-              (rb) =>
-                rb.from.x === x &&
-                rb.from.y === y &&
-                rb.direction === directionName
-            );
-            if (!hasRoadblock) {
-              console.warn(
-                `⚠️  Orphaned zero cost: (${x},${y}) ${directionName} has cost 0 but no roadblock!`
-              );
-              orphanedZeroCosts++;
-            }
-          }
-        }
-      }
-    }
-
-    console.log(`Invalid roadblocks: ${invalidRoadblocks}`);
-    console.log(`Orphaned zero costs: ${orphanedZeroCosts}`);
-
-    if (invalidRoadblocks === 0 && orphanedZeroCosts === 0) {
-      console.log(
-        `✅ All ${roadblocks.length} roadblocks have correct cost 0 and no orphaned zeros`
-      );
-    } else {
-      console.error(
-        `❌ Issues found: ${invalidRoadblocks} invalid roadblocks, ${orphanedZeroCosts} orphaned zeros`
-      );
-    }
-    console.log("=== END VERIFICATION ===");
-
     return { stores, destinations, tunnels, roadblocks, trafficCosts };
   }
 
