@@ -1,92 +1,156 @@
-# AI Delivery System
+# AI Package Delivery System
 
 ## Project Overview
-This project implements an **artificial intelligence delivery system** operating on a city modeled as a 2D grid.  
-A set of delivery trucks must transport packages from multiple stores to multiple customer destinations while minimizing travel time.  
-Roads may contain traffic levels (costs), blocked segments, and optional tunnels connecting distant points.
 
----
-## Compile and Run 
-### Note : I have changed project structure so please read this doc carefully before running 
-To properly create and manage **unit tests**, we require a **Maven project structure**. Maven simplifies:
+The **AI Package Delivery System** is a simulation of a delivery service operating in a city modeled as a 2D grid.  
+The system uses **search algorithms** to plan optimal routes for delivery trucks that transport packages from multiple stores to multiple customer destinations.  
 
-* Dependency management (like JUnit)
-* Standardized project structure
-* Running all tests with a single command
-* Future project extensions and builds
+Key features:  
 
+- Roads have **traffic costs** affecting travel time.  
+- Some road segments can be **blocked**.  
+- **Tunnels** allow shortcuts between distant points.  
+- Supports multiple search strategies: BFS, DFS, Uniform Cost Search (UCS), Greedy, and A*.  
+- Visualization and performance metrics to compare algorithms.  
 
-### Steps to Install Maven
+This project can be used in **two ways**:  
 
-1. **Download Maven**
-   Go to [https://maven.apache.org/download.cgi](https://maven.apache.org/download.cgi) and download the latest binary zip.
-
-2. **Extract Maven**
-   Extract the zip to a directory of your choice:
-
-   * Windows: `C:\Program Files\Apache\Maven`
-   * Linux/Mac: `/opt/maven`
-
-3. **Set Environment Variables**
-   Add Maven `bin` directory to your `PATH`.
-
-
-4. **Verify Installation**
-   Open a terminal and run:
-
-   ```bash
-   mvn -v
-   ```
-
-   You should see the Maven version and Java version displayed.
-
-5. **Install Java Maven Extension (VS Code)**
-   Install the **Java Extension Pack** and **Maven for Java** extensions in VS Code.
+1. **Desktop/Java Application**: Run simulations locally with a Java-based GUI.  
+2. **Web Interface**: Angular-based interactive application for designing grids and visualizing delivery plans in the browser.  
 
 ---
 
-### Compile and Run with Maven
+## Desktop Application (Java GUI)
 
-Once Maven is installed and the project is converted to the standard Maven structure:
+### Prerequisites
 
-**Compile project:**
+- Java 17+  
+- Maven (for dependency management and running unit tests)  
+
+### Installation & Setup
+
+1. **Install Maven**: [https://maven.apache.org/download.cgi](https://maven.apache.org/download.cgi)  
+2. Extract Maven and add its `bin` folder to your system PATH.  
+3. Verify installation:  
 
 ```bash
+mvn -v
+````
+
+### Compile & Run
+
+```bash
+# Compile project
 mvn compile
-```
 
-**Run the Main class:**
-
-```bash
+# Run the main application
 mvn exec:java
 ```
 
----
 ### Unit Testing
 
-* Place all test files in:
-
-```
-src/test/java/code/
-```
-
-* Add JUnit as a dependency in `pom.xml`.
-* Run all tests using:
+* Place all test files under `src/test/java/code/`.
+* Ensure JUnit dependency is in `pom.xml`.
+* Run all tests:
 
 ```bash
 mvn test
 ```
 
----
-If you want to compile and run the project manually:
-### Compile and run Without Maven 
-**Compile:**
+### Manual Compile & Run (Without Maven)
+
 ```bash
+# Compile
 javac -d target/classes src/main/java/code/*.java
-````
 
-**Run:**
-
-```bash
+# Run
 java -cp target/classes code.Main
 ```
+
+---
+
+## Web Interface (Angular UI)
+
+The web interface allows **interactive visualization and planning** of delivery routes in a browser.
+
+### Features
+
+* Interactive grid-based canvas for designing delivery networks
+* Add stores, destinations, tunnels, and roadblocks
+* Set and visualize traffic costs
+* Choose and run search algorithms (BFS, DFS, UCS, A*, Greedy)
+* Animate trucks delivering packages
+* Export and import grid configurations (JSON)
+* Grid sizes: 3x3 to 20x20 cells
+
+### Prerequisites
+
+* Node.js v18+
+* npm v10+
+* Angular CLI v19+
+* Java 17+ & Maven (backend API)
+
+### Setup
+
+```bash
+cd delivery-planner-ui
+npm install
+```
+
+### Run Development Server
+
+```bash
+npm start
+```
+
+* Application available at `http://localhost:4200`
+* Automatically proxies API requests to backend at `http://localhost:8080`
+
+### Build for Production
+
+```bash
+npm run build
+```
+
+* Build artifacts stored in `dist/delivery-planner-ui`
+
+### Backend
+
+Start Spring Boot backend API:
+
+```bash
+mvn spring-boot:run
+```
+
+Or use the provided PowerShell script:
+
+```powershell
+.\start-backend.ps1
+```
+
+---
+
+## How to Use (Web UI)
+
+1. Set grid size (3–20 rows/columns)
+2. Add stores (pickup points)
+3. Add destinations (delivery points)
+4. Add tunnels (shortcuts)
+5. Add roadblocks (blocked edges)
+6. Set traffic costs
+7. Select a search algorithm
+8. Click **Plan Routes**
+9. Watch animated trucks deliver packages
+10. Export or import grid configurations
+
+---
+
+## Technologies Used
+
+* **Java 17** & **Maven** – backend logic & algorithms
+* **Angular 19** & **TypeScript** – interactive web UI
+* **Canvas API** – grid visualization
+* **RxJS** – reactive programming
+* **JUnit 5** – unit testing
+* **Spring Boot** – backend API
+
