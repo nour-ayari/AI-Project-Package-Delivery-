@@ -12,33 +12,24 @@ import { FormsModule } from "@angular/forms";
 import { HttpClientModule } from "@angular/common/http";
 import {
   DeliveryPlannerService,
-  GridConfig,
   Position,
-  TunnelConfig,
-  RoadBlockConfig,
   DeliveryRoute,
 } from "../../services/delivery-planner.service";
 import {
   animate,
   keyframes,
-  state,
   style,
   transition,
   trigger,
 } from "@angular/animations";
-
-interface GridCell {
-  x: number;
-  y: number;
-  type:
-    | "empty"
-    | "store"
-    | "destination"
-    | "tunnel-start"
-    | "tunnel-end"
-    | "path";
-  trafficCosts: number[]; // [up, down, left, right]
-}
+import { GridInteractionService } from "./services/grid-interaction.service";
+import { GridRendererService } from "./services/grid-renderer.service";
+import { GridGeneratorService } from "./services/grid-generator.service";
+import { AnimationService } from "./services/animation.service";
+import { GridStateService } from "./services/grid-state.service";
+import { CanvasViewportService } from "./services/canvas-viewport.service";
+import { ResultsService } from "./services/results.service";
+import { CostEditingService } from "./services/cost-editing.service";
 
 @Component({
   selector: "app-delivery-planner",
@@ -46,7 +37,17 @@ interface GridCell {
   imports: [CommonModule, FormsModule, HttpClientModule],
   templateUrl: "./delivery-planner.component.html",
   styleUrl: "./delivery-planner.component.css",
-  providers: [DeliveryPlannerService],
+  providers: [
+    DeliveryPlannerService,
+    GridInteractionService,
+    GridRendererService,
+    GridGeneratorService,
+    AnimationService,
+    GridStateService,
+    CanvasViewportService,
+    ResultsService,
+    CostEditingService,
+  ],
   animations: [
     trigger("fadeAnimation", [
       transition(":enter", [
@@ -106,6 +107,22 @@ interface GridCell {
         ),
       ]),
     ]),
+    trigger("slideInAnimation", [
+      transition(":enter", [
+        style({ transform: "translateY(-20px)", opacity: 0 }),
+        animate(
+          "300ms ease-out",
+          style({ transform: "translateY(0)", opacity: 1 })
+        ),
+      ]),
+      transition(":leave", [
+        style({ transform: "translateY(0)", opacity: 1 }),
+        animate(
+          "300ms ease-in",
+          style({ transform: "translateY(-20px)", opacity: 0 })
+        ),
+      ]),
+    ]),
   ],
 })
 export class DeliveryPlannerComponent
@@ -114,72 +131,46 @@ export class DeliveryPlannerComponent
   @ViewChild("gridCanvas") canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private ctx!: CanvasRenderingContext2D;
-  private scale: number = 1;
-  private offset = { x: 0, y: 0 };
-  private lastMousePosition = { x: 0, y: 0 };
-  private isDraggingCanvas = false;
   private animationFrameId: number | null = null;
 
   // Theme
   isDarkTheme = false;
 
-  // Grid visibility
-  showGrid = false;
-
-  // Grid configuration
-  gridRows = 10;
-  gridCols = 10;
-  cellSize = 50;
-
-  // Grid data
-  stores: Position[] = [];
-  destinations: Position[] = [];
-  tunnels: TunnelConfig[] = [];
-  roadblocks: RoadBlockConfig[] = [];
-  trafficCosts: number[][][] = []; // [y][x][direction]
-
-  // Operation modes
-  mode:
-    | "move"
-    | "add-store"
-    | "add-destination"
-    | "add-tunnel"
-    | "add-roadblock"
-    | "add-cost"
-    | "generate-random"
-    | "delete" = "move";
-  tunnelStart: Position | null = null;
-
-  // Strategy
-  selectedStrategy = "BFS";
-  strategies = ["BFS", "DFS", "UCS", "AStar", "Greedy"];
-
-  // Results
-  routes: DeliveryRoute[] = [];
-  isLoading = false;
-  error: string | null = null;
-
-  // Animation state
-  isAnimating = false;
-  currentAnimatingRoute = 0;
-  currentAnimatingStep = 0;
-  truckPosition: Position | null = null;
-  animationSpeed = 200; // milliseconds per step
-  animationTimer: any = null;
-
-  constructor(private deliveryService: DeliveryPlannerService) {}
+  constructor(
+    private deliveryService: DeliveryPlannerService,
+    private gridInteraction: GridInteractionService,
+    private gridRenderer: GridRendererService,
+    private gridGenerator: GridGeneratorService,
+    private animationService: AnimationService,
+    public gridState: GridStateService,
+    public viewport: CanvasViewportService,
+    public resultsService: ResultsService,
+    public costEditing: CostEditingService
+  ) {}
 
   ngOnInit(): void {
     // Load theme preference
     this.isDarkTheme = localStorage.getItem("deliveryPlannerTheme") === "dark";
 
-    // Initialize traffic costs (default 1 for all directions)
-    this.initializeTrafficCosts();
+    // Update detailed results
+    this.updateDetailedResults();
+
+    // Setup animation callbacks
+    this.animationService.setCallbacks(
+      (route: number, step: number) =>
+        this.onAnimationPositionUpdate(route, step),
+      () => this.onAnimationComplete(),
+      (route: number) => this.onRouteComplete(route)
+    );
   }
 
   ngAfterViewInit(): void {
     const canvas = this.canvasRef.nativeElement;
     this.ctx = canvas.getContext("2d")!;
+
+    // Setup renderer
+    this.gridRenderer.setContext(this.ctx);
+    this.gridRenderer.setTheme(this.isDarkTheme);
 
     // Set canvas size
     this.resizeCanvas();
@@ -198,6 +189,7 @@ export class DeliveryPlannerComponent
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
     }
+    this.animationService.stopRouteAnimation();
     window.removeEventListener("resize", this.resizeCanvas.bind(this));
   }
 
@@ -211,21 +203,12 @@ export class DeliveryPlannerComponent
 
   toggleTheme(): void {
     this.isDarkTheme = !this.isDarkTheme;
+    this.gridRenderer.setTheme(this.isDarkTheme);
     localStorage.setItem(
       "deliveryPlannerTheme",
       this.isDarkTheme ? "dark" : "light"
     );
     this.renderGrid();
-  }
-
-  private initializeTrafficCosts(): void {
-    this.trafficCosts = [];
-    for (let y = 0; y < this.gridRows; y++) {
-      this.trafficCosts[y] = [];
-      for (let x = 0; x < this.gridCols; x++) {
-        this.trafficCosts[y][x] = [1, 1, 1, 1]; // [up, down, left, right]
-      }
-    }
   }
 
   private resizeCanvas(): void {
@@ -244,12 +227,15 @@ export class DeliveryPlannerComponent
 
   private centerGrid(): void {
     const canvas = this.canvasRef.nativeElement;
-    const gridWidth = this.gridCols * this.cellSize;
-    const gridHeight = this.gridRows * this.cellSize;
+    const gridWidth = this.gridState.gridCols * this.gridState.cellSize;
+    const gridHeight = this.gridState.gridRows * this.gridState.cellSize;
 
-    // Calculate offset to center the grid
-    this.offset.x = (canvas.width / this.scale - gridWidth) / 2;
-    this.offset.y = (canvas.height / this.scale - gridHeight) / 2;
+    this.viewport.centerGrid(
+      canvas.width,
+      canvas.height,
+      gridWidth,
+      gridHeight
+    );
   }
 
   private startAnimationLoop(): void {
@@ -275,29 +261,32 @@ export class DeliveryPlannerComponent
 
   private handleMouseDown(e: MouseEvent): void {
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / this.scale - this.offset.x;
-    const y = (e.clientY - rect.top) / this.scale - this.offset.y;
+    const x =
+      (e.clientX - rect.left) / this.viewport.getScale() -
+      this.viewport.getOffset().x;
+    const y =
+      (e.clientY - rect.top) / this.viewport.getScale() -
+      this.viewport.getOffset().y;
 
     this.processPointerDown(x, y);
-    this.lastMousePosition = { x: e.clientX, y: e.clientY };
+    this.viewport.setLastMousePosition(e.clientX, e.clientY);
   }
 
   private handleMouseMove(e: MouseEvent): void {
-    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    if (this.isDraggingCanvas) {
-      const dx = clientX - this.lastMousePosition.x;
-      const dy = clientY - this.lastMousePosition.y;
-      this.offset.x += dx / this.scale;
-      this.offset.y += dy / this.scale;
-      this.lastMousePosition = { x: clientX, y: clientY };
+    if (this.viewport.isDragging()) {
+      const lastPos = this.viewport.getLastMousePosition();
+      const dx = clientX - lastPos.x;
+      const dy = clientY - lastPos.y;
+      this.viewport.handlePan(dx, dy);
+      this.viewport.setLastMousePosition(clientX, clientY);
     }
   }
 
   private handleMouseUp(): void {
-    this.isDraggingCanvas = false;
+    this.viewport.setDragging(false);
   }
 
   private handleWheel(e: WheelEvent): void {
@@ -307,100 +296,154 @@ export class DeliveryPlannerComponent
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const worldX = mouseX / this.scale - this.offset.x;
-    const worldY = mouseY / this.scale - this.offset.y;
-
-    const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
-    this.scale *= zoomFactor;
-
-    this.scale = Math.min(Math.max(0.5, this.scale), 3);
-
-    this.offset.x = mouseX / this.scale - worldX;
-    this.offset.y = mouseY / this.scale - worldY;
+    this.viewport.handleZoom(mouseX, mouseY, e.deltaY < 0);
   }
 
   private processPointerDown(x: number, y: number): void {
-    const gridX = Math.floor(x / this.cellSize);
-    const gridY = Math.floor(y / this.cellSize);
+    const gridX = Math.floor(x / this.gridState.cellSize);
+    const gridY = Math.floor(y / this.gridState.cellSize);
 
     if (
       gridX < 0 ||
-      gridX >= this.gridCols ||
+      gridX >= this.gridState.gridCols ||
       gridY < 0 ||
-      gridY >= this.gridRows
+      gridY >= this.gridState.gridRows
     ) {
-      if (this.mode === "move") {
-        this.isDraggingCanvas = true;
+      if (this.gridState.mode === "move") {
+        this.viewport.setDragging(true);
       }
       return;
     }
 
     const pos: Position = { x: gridX, y: gridY };
 
-    if (this.mode === "delete") {
-      this.deleteAtPosition(pos);
-    } else if (this.mode === "add-store") {
-      if (!this.findItemAtPosition(pos, this.stores)) {
-        this.stores.push(pos);
-      }
-    } else if (this.mode === "add-destination") {
-      if (!this.findItemAtPosition(pos, this.destinations)) {
-        this.destinations.push(pos);
-      }
-    } else if (this.mode === "add-tunnel") {
-      if (this.tunnelStart === null) {
-        this.tunnelStart = pos;
-      } else {
-        if (this.tunnelStart.x !== pos.x || this.tunnelStart.y !== pos.y) {
-          this.tunnels.push({
-            start: this.tunnelStart,
-            end: pos,
-            cost: 5, // default tunnel cost
+    // Special handling for roadblock mode - detect which edge/wall was clicked
+    if (this.gridState.mode === "add-roadblock") {
+      const wallInfo = this.gridInteraction.detectWallClick(
+        x,
+        y,
+        this.gridState.cellSize,
+        this.gridState.gridCols,
+        this.gridState.gridRows
+      );
+      if (wallInfo) {
+        // Check if roadblock already exists
+        const exists = this.gridState.roadblocks.some(
+          (rb) =>
+            rb.from.x === wallInfo.from.x &&
+            rb.from.y === wallInfo.from.y &&
+            rb.direction === wallInfo.direction
+        );
+        if (!exists) {
+          this.gridState.roadblocks.push({
+            from: wallInfo.from,
+            direction: wallInfo.direction,
           });
+          this.updateDetailedResults();
+          const dirIndex = ["up", "down", "left", "right"].indexOf(
+            wallInfo.direction
+          );
+          if (
+            dirIndex >= 0 &&
+            this.gridState.trafficCosts[wallInfo.from.y] &&
+            this.gridState.trafficCosts[wallInfo.from.y][wallInfo.from.x]
+          ) {
+            this.gridState.trafficCosts[wallInfo.from.y][wallInfo.from.x][
+              dirIndex
+            ] = 0;
+          }
         }
-        this.tunnelStart = null;
       }
-    } else if (this.mode === "add-roadblock") {
-      // For now, block all directions
-      ["up", "down", "left", "right"].forEach((dir) => {
-        this.roadblocks.push({ from: pos, direction: dir });
-      });
-    } else if (this.mode === "add-cost") {
-      this.editCellCost(pos);
-    } else if (this.mode === "move") {
-      this.isDraggingCanvas = true;
+      this.renderGrid();
+      return;
     }
-  }
 
-  private findItemAtPosition(
-    pos: Position,
-    list: Position[]
-  ): Position | undefined {
-    return list.find((item) => item.x === pos.x && item.y === pos.y);
-  }
+    if (this.gridState.mode === "delete") {
+      const deletedRoadblocks = this.gridState.roadblocks.filter(
+        (rb) => rb.from.x === pos.x && rb.from.y === pos.y
+      );
 
-  private deleteAtPosition(pos: Position): void {
-    // Remove stores
-    this.stores = this.stores.filter((s) => s.x !== pos.x || s.y !== pos.y);
+      const result = this.gridInteraction.deleteAtPosition(
+        pos,
+        this.gridState.stores,
+        this.gridState.destinations,
+        this.gridState.tunnels,
+        this.gridState.roadblocks
+      );
+      this.gridState.stores = result.stores;
+      this.gridState.destinations = result.destinations;
+      this.gridState.tunnels = result.tunnels;
+      this.gridState.roadblocks = result.roadblocks;
+      this.updateDetailedResults();
 
-    // Remove destinations
-    this.destinations = this.destinations.filter(
-      (d) => d.x !== pos.x || d.y !== pos.y
-    );
-
-    // Remove tunnels
-    this.tunnels = this.tunnels.filter(
-      (t) =>
-        !(
-          (t.start.x === pos.x && t.start.y === pos.y) ||
-          (t.end.x === pos.x && t.end.y === pos.y)
+      // Reset traffic costs to 1 for deleted roadblocks
+      deletedRoadblocks.forEach((rb) => {
+        const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+        if (
+          dirIndex >= 0 &&
+          this.gridState.trafficCosts[rb.from.y] &&
+          this.gridState.trafficCosts[rb.from.y][rb.from.x]
+        ) {
+          this.gridState.trafficCosts[rb.from.y][rb.from.x][dirIndex] = 1;
+        }
+      });
+    } else if (this.gridState.mode === "add-store") {
+      if (this.gridState.stores.length >= 3) {
+        this.gridState.error = "Maximum 3 stores allowed";
+        return;
+      }
+      if (
+        !this.gridInteraction.findItemAtPosition(pos, this.gridState.stores)
+      ) {
+        this.gridState.stores.push(pos);
+        this.updateDetailedResults();
+        this.gridState.error = null; // Clear error on successful addition
+      }
+    } else if (this.gridState.mode === "add-destination") {
+      if (this.gridState.destinations.length >= 10) {
+        this.gridState.error = "Maximum 10 destinations allowed";
+        return;
+      }
+      if (
+        !this.gridInteraction.findItemAtPosition(
+          pos,
+          this.gridState.destinations
         )
-    );
-
-    // Remove roadblocks
-    this.roadblocks = this.roadblocks.filter(
-      (rb) => rb.from.x !== pos.x || rb.from.y !== pos.y
-    );
+      ) {
+        this.gridState.destinations.push(pos);
+        this.updateDetailedResults();
+        this.gridState.error = null; // Clear error on successful addition
+      }
+    } else if (this.gridState.mode === "add-tunnel") {
+      if (this.gridState.tunnelStart === null) {
+        this.gridState.tunnelStart = pos;
+      } else {
+        if (
+          this.gridState.tunnelStart.x !== pos.x ||
+          this.gridState.tunnelStart.y !== pos.y
+        ) {
+          this.gridState.tunnels.push({
+            start: this.gridState.tunnelStart,
+            end: pos,
+          });
+          this.updateDetailedResults();
+        }
+        this.gridState.tunnelStart = null;
+      }
+    } else if (this.gridState.mode === "add-cost") {
+      const wallInfo = this.gridInteraction.detectWallClick(
+        x,
+        y,
+        this.gridState.cellSize,
+        this.gridState.gridCols,
+        this.gridState.gridRows
+      );
+      if (wallInfo) {
+        this.editEdgeCost(wallInfo.from, wallInfo.direction);
+      }
+    } else if (this.gridState.mode === "move") {
+      this.viewport.setDragging(true);
+    }
   }
 
   private renderGrid(): void {
@@ -409,8 +452,7 @@ export class DeliveryPlannerComponent
     const canvas = this.canvasRef.nativeElement;
     this.ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Don't draw anything if grid is not shown yet
-    if (!this.showGrid) {
+    if (!this.gridState.showGrid) {
       return;
     }
 
@@ -418,447 +460,354 @@ export class DeliveryPlannerComponent
     this.ctx.save();
 
     // Apply transformations
-    this.ctx.translate(this.offset.x * this.scale, this.offset.y * this.scale);
-    this.ctx.scale(this.scale, this.scale);
+    const offset = this.viewport.getOffset();
+    const scale = this.viewport.getScale();
+    this.ctx.translate(offset.x * scale, offset.y * scale);
+    this.ctx.scale(scale, scale);
 
-    // Draw grid
-    this.drawGridLines();
-
-    // Draw tunnels first (behind everything)
-    this.drawTunnels();
-
-    // Draw traffic costs
-    this.drawTrafficCosts();
+    // Draw grid components using renderer service
+    this.gridRenderer.drawGridLines(
+      this.gridState.gridRows,
+      this.gridState.gridCols,
+      this.gridState.cellSize
+    );
+    this.gridRenderer.drawTunnels(
+      this.gridState.tunnels,
+      this.gridState.cellSize
+    );
+    this.gridRenderer.drawTrafficCosts(
+      this.gridState.trafficCosts,
+      this.gridState.gridRows,
+      this.gridState.gridCols,
+      this.gridState.cellSize
+    );
 
     // Draw routes if any
-    if (this.routes.length > 0) {
-      this.drawRoutes();
+    if (this.resultsService.routes.length > 0) {
+      this.gridRenderer.drawRoutes(
+        this.resultsService.routes,
+        this.animationService.isAnimationActive(),
+        this.animationService.getCurrentRoute(),
+        this.animationService.getCurrentStep(),
+        this.gridState.cellSize
+      );
     }
 
-    // Draw stores
-    this.drawStores();
-
-    // Draw destinations
-    this.drawDestinations();
-
-    // Draw roadblocks
-    this.drawRoadblocks();
+    this.gridRenderer.drawStores(
+      this.gridState.stores,
+      this.gridState.cellSize
+    );
+    this.gridRenderer.drawDestinations(
+      this.gridState.destinations,
+      this.gridState.cellSize
+    );
+    this.gridRenderer.drawRoadblocks(
+      this.gridState.roadblocks,
+      this.gridState.gridRows,
+      this.gridState.gridCols,
+      this.gridState.cellSize,
+      this.gridState.trafficCosts
+    );
 
     // Draw tunnel start indicator if in tunnel mode
-    if (this.mode === "add-tunnel" && this.tunnelStart) {
-      this.drawTunnelStartIndicator();
+    if (this.gridState.mode === "add-tunnel") {
+      this.gridRenderer.drawTunnelStartIndicator(
+        this.gridState.tunnelStart,
+        this.gridState.cellSize
+      );
     }
 
     // Draw animated truck if animation is active
-    if (this.isAnimating && this.truckPosition) {
-      this.drawTruck();
+    if (
+      this.animationService.isAnimationActive() &&
+      this.resultsService.truckPosition
+    ) {
+      this.gridRenderer.drawTruck(
+        this.resultsService.truckPosition,
+        this.gridState.cellSize
+      );
     }
 
     // Restore context
     this.ctx.restore();
   }
 
-  private drawGridLines(): void {
-    this.ctx.strokeStyle = this.isDarkTheme
-      ? "rgba(255, 255, 255, 0.1)"
-      : "rgba(0, 0, 0, 0.1)";
-    this.ctx.lineWidth = 1;
-
-    // Vertical lines
-    for (let x = 0; x <= this.gridCols; x++) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(x * this.cellSize, 0);
-      this.ctx.lineTo(x * this.cellSize, this.gridRows * this.cellSize);
-      this.ctx.stroke();
+  generateRandomGrid(): void {
+    this.gridState.resetGrid();
+    if (!this.gridState.showGrid) {
+      this.gridState.showGrid = true;
+      this.centerGrid();
     }
 
-    // Horizontal lines
-    for (let y = 0; y <= this.gridRows; y++) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, y * this.cellSize);
-      this.ctx.lineTo(this.gridCols * this.cellSize, y * this.cellSize);
-      this.ctx.stroke();
-    }
-  }
+    const result = this.gridGenerator.generateRandomGrid(
+      this.gridState.gridRows,
+      this.gridState.gridCols
+    );
 
-  private drawStores(): void {
-    for (const store of this.stores) {
-      const centerX = store.x * this.cellSize + this.cellSize / 2;
-      const centerY = store.y * this.cellSize + this.cellSize / 2;
-
-      // Draw circle background
-      this.ctx.fillStyle = "#B19CD9";
-      this.ctx.strokeStyle = "#8B7BB8";
-      this.ctx.lineWidth = 3;
-      this.ctx.beginPath();
-      this.ctx.arc(centerX, centerY, this.cellSize * 0.3, 0, 2 * Math.PI);
-      this.ctx.fill();
-      this.ctx.stroke();
-
-      // Draw 'S' label
-      this.ctx.fillStyle = "#FFFFFF";
-      this.ctx.font = `bold ${Math.max(12, this.cellSize * 0.4)}px Arial`;
-      this.ctx.textAlign = "center";
-      this.ctx.textBaseline = "middle";
-      this.ctx.fillText("S", centerX, centerY);
-    }
-  }
-
-  private drawDestinations(): void {
-    for (const dest of this.destinations) {
-      const centerX = dest.x * this.cellSize + this.cellSize / 2;
-      const centerY = dest.y * this.cellSize + this.cellSize / 2;
-
-      // Draw square background
-      this.ctx.fillStyle = "#FF5722";
-      this.ctx.strokeStyle = "#D84315";
-      this.ctx.lineWidth = 3;
-      this.ctx.beginPath();
-      this.ctx.rect(
-        centerX - this.cellSize * 0.3,
-        centerY - this.cellSize * 0.3,
-        this.cellSize * 0.6,
-        this.cellSize * 0.6
-      );
-      this.ctx.fill();
-      this.ctx.stroke();
-
-      // Draw 'D' label
-      this.ctx.fillStyle = "#FFFFFF";
-      this.ctx.font = `bold ${Math.max(12, this.cellSize * 0.4)}px Arial`;
-      this.ctx.textAlign = "center";
-      this.ctx.textBaseline = "middle";
-      this.ctx.fillText("D", centerX, centerY);
-    }
-  }
-
-  private drawTunnels(): void {
-    this.ctx.strokeStyle = "#9C27B0";
-    this.ctx.lineWidth = 4;
-    this.ctx.setLineDash([10, 5]);
-
-    for (const tunnel of this.tunnels) {
-      const startX = tunnel.start.x * this.cellSize + this.cellSize / 2;
-      const startY = tunnel.start.y * this.cellSize + this.cellSize / 2;
-      const endX = tunnel.end.x * this.cellSize + this.cellSize / 2;
-      const endY = tunnel.end.y * this.cellSize + this.cellSize / 2;
-
-      this.ctx.beginPath();
-      this.ctx.moveTo(startX, startY);
-      this.ctx.lineTo(endX, endY);
-      this.ctx.stroke();
-
-      // Draw tunnel entrance/exit markers
-      this.ctx.fillStyle = "#9C27B0";
-      this.ctx.beginPath();
-      this.ctx.arc(startX, startY, 8, 0, 2 * Math.PI);
-      this.ctx.fill();
-      this.ctx.beginPath();
-      this.ctx.arc(endX, endY, 8, 0, 2 * Math.PI);
-      this.ctx.fill();
-    }
-
-    this.ctx.setLineDash([]);
-  }
-
-  private drawTrafficCosts(): void {
-    this.ctx.fillStyle = this.isDarkTheme ? "#AAAAAA" : "#555555";
-    this.ctx.font = `${Math.max(8, this.cellSize * 0.12)}px Arial`;
-    this.ctx.textAlign = "center";
-    this.ctx.textBaseline = "middle";
-
-    for (let y = 0; y < this.gridRows; y++) {
-      for (let x = 0; x < this.gridCols; x++) {
-        const cellCosts = this.trafficCosts[y][x];
-
-        // Draw right cost (cost to move right from this cell to x+1,y)
-        if (x < this.gridCols - 1) {
-          const cost = cellCosts[3]; // right cost
-          const centerX = x * this.cellSize + this.cellSize;
-          const centerY = y * this.cellSize + this.cellSize / 2;
-          this.ctx.fillText(cost.toString(), centerX, centerY);
-        }
-
-        // Draw down cost (cost to move down from this cell to x,y+1)
-        if (y < this.gridRows - 1) {
-          const cost = cellCosts[1]; // down cost
-          const centerX = x * this.cellSize + this.cellSize / 2;
-          const centerY = y * this.cellSize + this.cellSize;
-          this.ctx.fillText(cost.toString(), centerX, centerY);
-        }
+    // Verify roadblocks in received data
+    let componentInvalidRoadblocks = 0;
+    result.roadblocks.forEach((rb, index) => {
+      const dirIndex = ["up", "down", "left", "right"].indexOf(rb.direction);
+      const actualCost = result.trafficCosts[rb.from.y][rb.from.x][dirIndex];
+      if (actualCost !== 0) {
+        componentInvalidRoadblocks++;
       }
-    }
+    });
+
+    this.gridState.stores = result.stores;
+    this.gridState.destinations = result.destinations;
+    this.gridState.tunnels = result.tunnels;
+    this.gridState.roadblocks = result.roadblocks;
+    this.gridState.trafficCosts = result.trafficCosts;
+
+    // Ensure all roadblocks have cost 0 in traffic costs
+    this.gridState.enforceRoadblockCosts();
+
+    // Update detailed results
+    this.updateDetailedResults();
   }
 
-  private drawRoadblocks(): void {
-    this.ctx.fillStyle = "#F44336";
-
-    for (const rb of this.roadblocks) {
-      const centerX = rb.from.x * this.cellSize + this.cellSize / 2;
-      const centerY = rb.from.y * this.cellSize + this.cellSize / 2;
-
-      // Draw X mark
-      this.ctx.strokeStyle = "#F44336";
-      this.ctx.lineWidth = 4;
-      this.ctx.beginPath();
-      this.ctx.moveTo(centerX - 10, centerY - 10);
-      this.ctx.lineTo(centerX + 10, centerY + 10);
-      this.ctx.moveTo(centerX + 10, centerY - 10);
-      this.ctx.lineTo(centerX - 10, centerY + 10);
-      this.ctx.stroke();
-    }
+  // Animation methods using service
+  startRouteAnimation(): void {
+    this.animationService.startRouteAnimation(this.resultsService.routes);
   }
 
-  private drawTunnelStartIndicator(): void {
-    if (!this.tunnelStart) return;
-
-    const centerX = this.tunnelStart.x * this.cellSize + this.cellSize / 2;
-    const centerY = this.tunnelStart.y * this.cellSize + this.cellSize / 2;
-
-    this.ctx.strokeStyle = "#9C27B0";
-    this.ctx.lineWidth = 3;
-    this.ctx.setLineDash([5, 5]);
-    this.ctx.beginPath();
-    this.ctx.arc(centerX, centerY, this.cellSize * 0.4, 0, 2 * Math.PI);
-    this.ctx.stroke();
-    this.ctx.setLineDash([]);
+  stopRouteAnimation(): void {
+    this.animationService.stopRouteAnimation();
+    this.resultsService.setTruckPosition(null);
+    this.renderGrid();
   }
 
-  private drawRoutes(): void {
-    // Only draw routes during animation - show only the currently animating route
-    if (!this.isAnimating) {
-      return; // Don't draw any routes when not animating
-    }
+  resetAnimation(): void {
+    this.animationService.resetAnimation();
+    this.resultsService.setTruckPosition(null);
+  }
 
-    // Only draw the currently animating route
-    const routeIndex = this.currentAnimatingRoute;
-    if (routeIndex < 0 || routeIndex >= this.routes.length) {
-      return;
-    }
-
-    const route = this.routes[routeIndex];
-    if (!route.path || route.path.length === 0) return;
-
-    // Highlight the currently animating route with gold color
-    this.ctx.strokeStyle = "#FFD700"; // Gold color for active route
-    this.ctx.lineWidth = 6; // Thicker line for active route
-    this.ctx.shadowColor = "#FFD700";
-    this.ctx.shadowBlur = 10;
-    this.ctx.lineCap = "round";
-    this.ctx.lineJoin = "round";
-
-    this.ctx.beginPath();
-    const firstPoint = route.path[0];
-    this.ctx.moveTo(
-      firstPoint.x * this.cellSize + this.cellSize / 2,
-      firstPoint.y * this.cellSize + this.cellSize / 2
+  animateSpecificRoute(routeIndex: number): void {
+    this.animationService.animateSpecificRoute(
+      routeIndex,
+      this.resultsService.routes
     );
+  }
 
-    for (let j = 1; j < route.path.length; j++) {
-      const point = route.path[j];
-      this.ctx.lineTo(
-        point.x * this.cellSize + this.cellSize / 2,
-        point.y * this.cellSize + this.cellSize / 2
+  // Animation callbacks
+  private onAnimationPositionUpdate(route: number, step: number): void {
+    if (
+      route < this.resultsService.routes.length &&
+      step < this.resultsService.routes[route].path.length
+    ) {
+      this.resultsService.setTruckPosition(
+        this.resultsService.routes[route].path[step]
       );
+      this.renderGrid();
     }
+  }
 
-    this.ctx.stroke();
+  private onAnimationComplete(): void {
+    this.resultsService.setTruckPosition(null);
+    this.renderGrid();
+  }
 
-    // Draw arrow at the end
-    if (route.path.length > 1) {
-      const lastPoint = route.path[route.path.length - 1];
-      const secondLastPoint = route.path[route.path.length - 2];
-      this.drawArrow(secondLastPoint, lastPoint, "#FFD700");
+  private onRouteComplete(routeIndex: number): void {
+    // When a route is complete, immediately move truck back to the store
+    if (routeIndex < this.resultsService.routes.length) {
+      const completedRoute = this.resultsService.routes[routeIndex];
+      this.resultsService.setTruckPosition(completedRoute.store);
+      this.renderGrid();
     }
-
-    // Reset shadow
-    this.ctx.shadowBlur = 0;
   }
 
-  private drawTruck(): void {
-    if (!this.truckPosition) return;
-
-    const centerX = this.truckPosition.x * this.cellSize + this.cellSize / 2;
-    const centerY = this.truckPosition.y * this.cellSize + this.cellSize / 2;
-
-    // Draw truck as emoji
-    this.ctx.font = `${Math.max(20, this.cellSize * 0.6)}px Arial`;
-    this.ctx.textAlign = "center";
-    this.ctx.textBaseline = "middle";
-    this.ctx.fillText("🚚", centerX, centerY);
-  }
-
-  private drawArrow(from: Position, to: Position, color: string): void {
-    const fromX = from.x * this.cellSize + this.cellSize / 2;
-    const fromY = from.y * this.cellSize + this.cellSize / 2;
-    const toX = to.x * this.cellSize + this.cellSize / 2;
-    const toY = to.y * this.cellSize + this.cellSize / 2;
-
-    const angle = Math.atan2(toY - fromY, toX - fromX);
-    const arrowLength = 15;
-    const arrowAngle = Math.PI / 6;
-
-    this.ctx.fillStyle = color;
-    this.ctx.beginPath();
-    this.ctx.moveTo(toX, toY);
-    this.ctx.lineTo(
-      toX - arrowLength * Math.cos(angle - arrowAngle),
-      toY - arrowLength * Math.sin(angle - arrowAngle)
-    );
-    this.ctx.lineTo(
-      toX - arrowLength * Math.cos(angle + arrowAngle),
-      toY - arrowLength * Math.sin(angle + arrowAngle)
-    );
-    this.ctx.closePath();
-    this.ctx.fill();
-  }
-
-  setMode(mode: typeof this.mode): void {
-    this.mode = mode;
-    this.tunnelStart = null;
-    if (!this.showGrid) {
-      this.showGrid = true; // Show grid when user selects a tool
-      this.centerGrid(); // Center it when first shown
+  // Grid management methods
+  setMode(mode: typeof this.gridState.mode): void {
+    this.gridState.setMode(mode);
+    this.costEditing.isEditingCellCost = false;
+    this.costEditing.isEditingEdgeCost = false;
+    if (!this.gridState.showGrid) {
+      this.gridState.showGrid = true;
+      this.centerGrid();
     }
   }
 
   resetView(): void {
-    this.scale = 1;
-    this.offset = { x: 0, y: 0 };
+    this.viewport.resetView();
   }
 
   resetGrid(): void {
-    this.stores = [];
-    this.destinations = [];
-    this.tunnels = [];
-    this.roadblocks = [];
-    this.routes = [];
-    this.error = null;
-    this.initializeTrafficCosts();
+    this.gridState.resetGrid();
+    this.resultsService.clearResults();
+    this.stopRouteAnimation();
+  }
+
+  clearResults(): void {
+    this.resultsService.clearResults();
+    this.gridState.error = null;
+    this.updateDetailedResults();
+    this.stopRouteAnimation();
+  }
+
+  getCurrentAlgorithmRoutes(): DeliveryRoute[] {
+    return this.resultsService.getCurrentAlgorithmRoutes(
+      this.gridState.selectedStrategy
+    );
+  }
+
+  isRouteActive(route: DeliveryRoute): boolean {
+    return (
+      this.animationService.isAnimationActive() &&
+      this.animationService.getCurrentRoute() <
+        this.resultsService.routes.length &&
+      this.resultsService.routes[this.animationService.getCurrentRoute()] ===
+        route
+    );
+  }
+
+  animateRouteForCurrentAlgorithm(routeIndex: number): void {
+    const currentAlgoRoutes = this.getCurrentAlgorithmRoutes();
+    if (routeIndex < currentAlgoRoutes.length) {
+      const route = currentAlgoRoutes[routeIndex];
+      // Find the index of this route in the combined routes array
+      const globalIndex = this.resultsService.routes.indexOf(route);
+      if (globalIndex >= 0) {
+        this.animateSpecificRoute(globalIndex);
+      }
+    }
+  }
+
+  onStrategyChange(): void {
+    // Update detailed results when strategy changes
+    this.updateDetailedResults();
   }
 
   onGridSizeChange(): void {
-    // Validate grid size
-    if (this.gridRows < 3 || this.gridRows > 20) {
-      this.gridRows = Math.max(3, Math.min(20, this.gridRows));
-    }
-    if (this.gridCols < 3 || this.gridCols > 20) {
-      this.gridCols = Math.max(3, Math.min(20, this.gridCols));
-    }
-
-    // Clear existing data that might be outside the new grid bounds
-    this.stores = this.stores.filter(
-      (s) => s.x < this.gridCols && s.y < this.gridRows
-    );
-    this.destinations = this.destinations.filter(
-      (d) => d.x < this.gridCols && d.y < this.gridRows
-    );
-    this.tunnels = this.tunnels.filter(
-      (t) =>
-        t.start.x < this.gridCols &&
-        t.start.y < this.gridRows &&
-        t.end.x < this.gridCols &&
-        t.end.y < this.gridRows
-    );
-    this.roadblocks = this.roadblocks.filter(
-      (rb) => rb.from.x < this.gridCols && rb.from.y < this.gridRows
-    );
-
-    // Clear routes when grid changes
-    this.routes = [];
-    this.error = null;
-
-    // Reinitialize traffic costs with new dimensions
-    this.initializeTrafficCosts();
-
-    // Re-center the grid
+    this.gridState.onGridSizeChange();
+    this.resultsService.routes = [];
     this.centerGrid();
-
-    // Update canvas size
     this.resizeCanvas();
+    this.updateDetailedResults();
   }
 
-  async planDelivery(): Promise<void> {
-    console.log("=== Starting planDelivery ===");
+  editCellCost(pos: Position): void {
+    this.costEditing.editCellCost(pos, this.gridState.trafficCosts);
+  }
 
-    if (this.stores.length === 0) {
-      this.error = "Please add at least one store";
-      console.error("No stores added");
-      return;
-    }
+  saveCellCost(): void {
+    this.costEditing.saveCellCost(this.gridState.trafficCosts);
+    this.resultsService.routes = [];
+    this.renderGrid();
+    this.updateDetailedResults();
+  }
 
-    if (this.destinations.length === 0) {
-      this.error = "Please add at least one destination";
-      console.error("No destinations added");
-      return;
-    }
+  cancelCellCostEdit(): void {
+    this.costEditing.cancelCellCostEdit();
+  }
 
-    console.log(
-      `Stores: ${this.stores.length}, Destinations: ${this.destinations.length}`
+  editEdgeCost(from: Position, direction: string): void {
+    const error = this.costEditing.editEdgeCost(
+      from,
+      direction,
+      this.gridState.trafficCosts,
+      this.gridState.roadblocks
     );
-    console.log("Stores:", this.stores);
-    console.log("Destinations:", this.destinations);
-    console.log("Strategy:", this.selectedStrategy);
+    if (error) {
+      this.gridState.error = error;
+    }
+  }
 
-    this.isLoading = true;
-    this.error = null;
-    this.routes = [];
+  saveEdgeCost(): void {
+    const result = this.costEditing.saveEdgeCost(
+      this.gridState.trafficCosts,
+      this.gridState.roadblocks
+    );
+    if (result.error) {
+      this.gridState.error = result.error;
+      return;
+    }
+    this.gridState.roadblocks = result.roadblocks;
+    this.resultsService.routes = [];
+    this.renderGrid();
+    this.updateDetailedResults();
+  }
+
+  cancelEdgeCostEdit(): void {
+    this.costEditing.cancelEdgeCostEdit();
+  }
+
+  // Missing methods for HTML template
+  async planDelivery(): Promise<void> {
+    if (this.gridState.stores.length === 0) {
+      this.gridState.error = "Please add at least one store";
+      return;
+    }
+
+    if (this.gridState.destinations.length === 0) {
+      this.gridState.error = "Please add at least one destination";
+      return;
+    }
+
+    this.gridState.isLoading = true;
+    this.gridState.error = null;
+    // Don't clear routes here - we want to accumulate results
 
     try {
-      const gridConfig: GridConfig = {
-        rows: this.gridRows,
-        cols: this.gridCols,
-        traffic: this.trafficCosts,
-        stores: this.stores,
-        destinations: this.destinations,
-        tunnels: this.tunnels,
-        roadblocks: this.roadblocks,
+      const gridConfig = {
+        rows: this.gridState.gridRows,
+        cols: this.gridState.gridCols,
+        traffic: this.gridState.trafficCosts,
+        stores: this.gridState.stores,
+        destinations: this.gridState.destinations,
+        tunnels: this.gridState.tunnels,
+        roadblocks: this.gridState.roadblocks,
       };
 
-      console.log("Sending request to backend with config:", gridConfig);
+      const backendStrategy = this.resultsService.mapStrategyToBackend(
+        this.gridState.selectedStrategy
+      );
 
       const response = await this.deliveryService
-        .planDelivery(gridConfig, this.selectedStrategy)
+        .planDelivery(gridConfig, backendStrategy)
         .toPromise();
 
-      console.log("Received response from backend:", response);
-
       if (response && response.success) {
-        this.routes = response.routes || [];
-        console.log(`Found ${this.routes.length} routes`);
+        const newRoutes = response.routes || [];
 
-        if (this.routes.length === 0) {
-          this.error = "No routes found. Check if destinations are reachable.";
+        if (newRoutes.length === 0) {
+          this.gridState.error =
+            "No routes found. Check if destinations are reachable.";
         } else {
+          // Store results for this algorithm
+          this.resultsService.addAlgorithmResults(
+            this.gridState.selectedStrategy,
+            newRoutes
+          );
+
+          // Update detailed results with planning info
+          this.updateDetailedResults();
           // Start animating routes
           this.startRouteAnimation();
         }
       } else {
-        this.error = response?.message || "Planning failed";
-        console.error("Planning failed:", response?.message);
+        this.gridState.error = response?.message || "Planning failed";
       }
     } catch (err: any) {
-      this.error = `Error: ${err.message || "Unknown error"}`;
-      console.error("Planning error:", err);
-      console.error("Error details:", err.error);
-      console.error("Error status:", err.status);
+      this.gridState.error = `Error: ${err.message || "Unknown error"}`;
     } finally {
-      this.isLoading = false;
-      console.log("=== Finished planDelivery ===");
+      this.gridState.isLoading = false;
     }
   }
 
-  exportGrid(): void {
-    const gridData = {
-      rows: this.gridRows,
-      cols: this.gridCols,
-      stores: this.stores,
-      destinations: this.destinations,
-      tunnels: this.tunnels,
-      roadblocks: this.roadblocks,
-      trafficCosts: this.trafficCosts,
-    };
+  private updateDetailedResults(): void {
+    this.resultsService.updateDetailedResults(
+      this.gridState.gridCols,
+      this.gridState.gridRows,
+      this.gridState.stores.length,
+      this.gridState.destinations.length,
+      this.gridState.tunnels.length,
+      this.gridState.roadblocks.length
+    );
+  }
 
+  exportGrid(): void {
+    const gridData = this.gridState.exportGrid();
     const dataStr = JSON.stringify(gridData, null, 2);
     const dataBlob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(dataBlob);
@@ -881,27 +830,15 @@ export class DeliveryPlannerComponent
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        this.gridRows = data.rows || 10;
-        this.gridCols = data.cols || 10;
-        this.stores = data.stores || [];
-        this.destinations = data.destinations || [];
-        this.tunnels = data.tunnels || [];
-        this.roadblocks = data.roadblocks || [];
-        this.trafficCosts = data.trafficCosts || [];
-
-        if (this.trafficCosts.length === 0) {
-          this.initializeTrafficCosts();
+        this.gridState.importGrid(data);
+        this.resultsService.routes = [];
+        if (!this.gridState.showGrid) {
+          this.gridState.showGrid = true;
+          this.centerGrid();
         }
-
-        this.routes = [];
-        this.error = null;
-        if (!this.showGrid) {
-          this.showGrid = true; // Show grid after import
-          this.centerGrid(); // Center it when first shown
-        }
+        this.updateDetailedResults();
       } catch (err) {
-        this.error = "Invalid grid file format";
-        console.error("Import error:", err);
+        this.gridState.error = "Invalid grid file format";
       }
     };
 
@@ -909,253 +846,17 @@ export class DeliveryPlannerComponent
     input.value = "";
   }
 
-  editCellCost(pos: Position): void {
-    const currentCosts = this.trafficCosts[pos.y][pos.x];
-    const costInput = prompt(
-      `Enter traffic costs for cell (${pos.x}, ${
-        pos.y
-      }) as: up,down,left,right\nCurrent: ${currentCosts.join(",")}`,
-      currentCosts.join(",")
-    );
-
-    if (costInput !== null) {
-      const costs = costInput.split(",").map((c) => {
-        const num = parseInt(c.trim());
-        return isNaN(num) || num < 1 ? 1 : num;
-      });
-
-      if (costs.length === 4) {
-        this.trafficCosts[pos.y][pos.x] = costs;
-        this.routes = []; // Clear routes when costs change
-      } else {
-        this.error =
-          "Please enter exactly 4 comma-separated numbers for up, down, left, right costs";
-      }
-    }
+  // Animation property getters that delegate to service
+  get isAnimating(): boolean {
+    return this.animationService.isAnimating;
   }
-
-  generateRandomGrid(): void {
-    this.resetGrid();
-    if (!this.showGrid) {
-      this.showGrid = true; // Show grid when generating random grid
-      this.centerGrid(); // Center it when first shown
-    }
-
-    const numStores = Math.floor(Math.random() * 3) + 2; // 2-4 stores
-    const numDestinations = Math.floor(Math.random() * 4) + 3; // 3-6 destinations
-    const numTunnels = Math.floor(Math.random() * 3); // 0-2 tunnels
-    const numRoadblocks = Math.floor(Math.random() * 5) + 2; // 2-6 roadblocks
-
-    // Generate random stores
-    for (let i = 0; i < numStores; i++) {
-      let pos: Position;
-      do {
-        pos = {
-          x: Math.floor(Math.random() * this.gridCols),
-          y: Math.floor(Math.random() * this.gridRows),
-        };
-      } while (this.findItemAtPosition(pos, this.stores));
-      this.stores.push(pos);
-    }
-
-    // Generate random destinations
-    for (let i = 0; i < numDestinations; i++) {
-      let pos: Position;
-      do {
-        pos = {
-          x: Math.floor(Math.random() * this.gridCols),
-          y: Math.floor(Math.random() * this.gridRows),
-        };
-      } while (
-        this.findItemAtPosition(pos, this.stores) ||
-        this.findItemAtPosition(pos, this.destinations)
-      );
-      this.destinations.push(pos);
-    }
-
-    // Generate random tunnels
-    for (let i = 0; i < numTunnels; i++) {
-      let start: Position, end: Position;
-      do {
-        start = {
-          x: Math.floor(Math.random() * this.gridCols),
-          y: Math.floor(Math.random() * this.gridRows),
-        };
-        end = {
-          x: Math.floor(Math.random() * this.gridCols),
-          y: Math.floor(Math.random() * this.gridRows),
-        };
-      } while (
-        (start.x === end.x && start.y === end.y) ||
-        this.findItemAtPosition(start, this.stores) ||
-        this.findItemAtPosition(start, this.destinations) ||
-        this.findItemAtPosition(end, this.stores) ||
-        this.findItemAtPosition(end, this.destinations)
-      );
-
-      this.tunnels.push({
-        start,
-        end,
-        cost: Math.floor(Math.random() * 10) + 1, // Random cost 1-10
-      });
-    }
-
-    // Generate random roadblocks
-    for (let i = 0; i < numRoadblocks; i++) {
-      let pos: Position;
-      const directions = ["up", "down", "left", "right"];
-      do {
-        pos = {
-          x: Math.floor(Math.random() * this.gridCols),
-          y: Math.floor(Math.random() * this.gridRows),
-        };
-      } while (
-        this.findItemAtPosition(pos, this.stores) ||
-        this.findItemAtPosition(pos, this.destinations)
-      );
-
-      // Block random directions
-      const numDirections = Math.floor(Math.random() * 3) + 1; // 1-3 directions
-      const shuffledDirections = directions.sort(() => 0.5 - Math.random());
-      for (let j = 0; j < numDirections; j++) {
-        this.roadblocks.push({ from: pos, direction: shuffledDirections[j] });
-      }
-    }
-
-    // Add some random traffic costs
-    for (let y = 0; y < this.gridRows; y++) {
-      for (let x = 0; x < this.gridCols; x++) {
-        if (Math.random() < 0.3) {
-          // 30% chance to have custom costs
-          this.trafficCosts[y][x] = [
-            Math.floor(Math.random() * 5) + 1, // up
-            Math.floor(Math.random() * 5) + 1, // down
-            Math.floor(Math.random() * 5) + 1, // left
-            Math.floor(Math.random() * 5) + 1, // right
-          ];
-        }
-      }
-    }
+  get currentAnimatingRoute(): number {
+    return this.animationService.currentAnimatingRoute;
   }
-
-  // ======================================================================
-  // ROUTE ANIMATION (Similar to Swing UI)
-  // ======================================================================
-
-  startRouteAnimation(): void {
-    console.log("Starting route animation");
-    this.isAnimating = true;
-    this.currentAnimatingRoute = 0;
-    this.currentAnimatingStep = 0;
-    this.animateNextStep();
+  get animationSpeed(): number {
+    return this.animationService.animationSpeed;
   }
-
-  stopRouteAnimation(): void {
-    console.log("Stopping route animation");
-    this.isAnimating = false;
-    if (this.animationTimer) {
-      clearTimeout(this.animationTimer);
-      this.animationTimer = null;
-    }
-    this.truckPosition = null;
-    this.renderGrid();
-  }
-
-  animateNextStep(): void {
-    if (!this.isAnimating || this.routes.length === 0) {
-      return;
-    }
-
-    // Check if we're done with all routes
-    if (this.currentAnimatingRoute >= this.routes.length) {
-      console.log("Animation complete for all routes");
-      this.isAnimating = false;
-      this.truckPosition = null;
-      this.renderGrid();
-      return;
-    }
-
-    const currentRoute = this.routes[this.currentAnimatingRoute];
-
-    // Check if current route is complete
-    if (this.currentAnimatingStep >= currentRoute.path.length) {
-      console.log(
-        `Route ${this.currentAnimatingRoute + 1}/${this.routes.length} complete`
-      );
-
-      // Move to next route
-      this.currentAnimatingRoute++;
-      this.currentAnimatingStep = 0;
-
-      // Pause between routes
-      this.animationTimer = setTimeout(() => {
-        this.animateNextStep();
-      }, 1000); // 1 second pause between routes
-
-      return;
-    }
-
-    // Update truck position
-    this.truckPosition = currentRoute.path[this.currentAnimatingStep];
-    this.currentAnimatingStep++;
-
-    // Render with truck
-    this.renderGrid();
-
-    // Schedule next step
-    this.animationTimer = setTimeout(() => {
-      this.animateNextStep();
-    }, this.animationSpeed);
-  }
-
-  resetAnimation(): void {
-    this.stopRouteAnimation();
-    this.currentAnimatingRoute = 0;
-    this.currentAnimatingStep = 0;
-    this.truckPosition = null;
-  }
-
-  animateSpecificRoute(routeIndex: number): void {
-    console.log(`Starting animation for route ${routeIndex + 1}`);
-    this.stopRouteAnimation(); // Stop any current animation
-
-    if (routeIndex < 0 || routeIndex >= this.routes.length) {
-      console.error(`Invalid route index: ${routeIndex}`);
-      return;
-    }
-
-    this.isAnimating = true;
-    this.currentAnimatingRoute = routeIndex;
-    this.currentAnimatingStep = 0;
-    this.animateSingleRoute();
-  }
-
-  animateSingleRoute(): void {
-    if (!this.isAnimating || this.currentAnimatingRoute >= this.routes.length) {
-      return;
-    }
-
-    const currentRoute = this.routes[this.currentAnimatingRoute];
-
-    // Check if current route is complete
-    if (this.currentAnimatingStep >= currentRoute.path.length) {
-      console.log(`Route ${this.currentAnimatingRoute + 1} animation complete`);
-      this.isAnimating = false;
-      this.truckPosition = null;
-      this.renderGrid();
-      return;
-    }
-
-    // Update truck position
-    this.truckPosition = currentRoute.path[this.currentAnimatingStep];
-    this.currentAnimatingStep++;
-
-    // Render with truck
-    this.renderGrid();
-
-    // Schedule next step
-    this.animationTimer = setTimeout(() => {
-      this.animateSingleRoute();
-    }, this.animationSpeed);
+  set animationSpeed(value: number) {
+    this.animationService.animationSpeed = value;
   }
 }

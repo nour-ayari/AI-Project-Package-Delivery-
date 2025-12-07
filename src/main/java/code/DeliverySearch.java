@@ -58,101 +58,25 @@ public class DeliverySearch implements SearchProblem {
 
         DeliverySearch problem = new DeliverySearch(start, goal, grid);
 
-        // Normalize strategy name (support both short codes and full names)
-        String normalizedStrategy = normalizeStrategy(strategy);
-
-        SearchResult result;
-        switch (normalizedStrategy) {
+        switch (strategy) {
             case "BF":
-                result = GenericSearch.BFS(problem);
-                break;
+                return GenericSearch.BFS(problem);
             case "DF":
-                result = GenericSearch.DFS(problem);
-                break;
+                return GenericSearch.DFS(problem);
             case "UC":
-                result = GenericSearch.UCS(problem);
-                break;
+                return GenericSearch.UCS(problem);
             case "ID":
-                result = GenericSearch.ID(problem);
-                break;
+                return GenericSearch.ID(problem);
             case "G1":
-                result = GenericSearch.Greedy(problem, 1);
-                break;
+                return GenericSearch.Greedy(problem, 1);
             case "G2":
-                result = GenericSearch.Greedy(problem, 2);
-                break;
+                return GenericSearch.Greedy(problem, 2);
             case "AS1":
-                result = GenericSearch.AStar(problem, 1);
-                break;
+                return GenericSearch.AStar(problem, 1);
             case "AS2":
-                result = GenericSearch.AStar(problem, 2);
-                break;
+                return GenericSearch.AStar(problem, 2);
             default:
-                System.out.println("Unknown strategy " + strategy);
                 return null;
-        }
-        
-        // Print node expansion details to console
-        if (result != null) {
-            System.out.println("  Route: " + start + " → " + goal + 
-                             " | Nodes Expanded: " + result.nodesExpanded + 
-                             " | Path Cost: " + result.cost);
-        }
-        
-        return result;
-    }
-
-    /**
-     * Normalize strategy names from Angular UI to backend codes
-     */
-    private static String normalizeStrategy(String strategy) {
-        if (strategy == null) {
-            return "BF"; // default
-        }
-        
-        // Convert to uppercase for case-insensitive matching
-        String upper = strategy.toUpperCase();
-        
-        // Map full names to short codes
-        switch (upper) {
-            case "BFS":
-            case "BREADTH-FIRST":
-            case "BF":
-                return "BF";
-            case "DFS":
-            case "DEPTH-FIRST":
-            case "DF":
-                return "DF";
-            case "UCS":
-            case "UNIFORM-COST":
-            case "UC":
-                return "UC";
-            case "ID":
-            case "ITERATIVE-DEEPENING":
-                return "ID";
-            case "GREEDY":
-            case "GREEDY1":
-            case "G1":
-                return "G1";
-            case "GREEDY2":
-            case "G2":
-                return "G2";
-            case "ASTAR":
-            case "A*":
-            case "A-STAR":
-            case "AS1":
-                return "AS1";
-            case "ASTAR2":
-            case "A*2":
-            case "AS2":
-                return "AS2";
-            default:
-                // If already in short form, return as-is
-                if (upper.matches("(BF|DF|UC|ID|G1|G2|AS1|AS2)")) {
-                    return upper;
-                }
-                System.out.println("Unknown strategy '" + strategy + "', defaulting to BFS");
-                return "BF";
         }
     }
 }
