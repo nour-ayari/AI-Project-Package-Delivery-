@@ -31,8 +31,8 @@ export class GridGeneratorService {
       }
     }
 
-    const numStores = Math.floor(Math.random() * 3) + 2; // 2-4 stores
-    const numDestinations = Math.floor(Math.random() * 4) + 3; // 3-6 destinations
+    const numStores = Math.floor(Math.random() * 3) + 1; // 1-3 stores (max 3)
+    const numDestinations = Math.floor(Math.random() * 8) + 3; // 3-10 destinations (max 10)
     const numTunnels = Math.floor(Math.random() * 3); // 0-2 tunnels
     const numRoadblocks = Math.floor(Math.random() * 5) + 2; // 2-6 roadblocks
 
