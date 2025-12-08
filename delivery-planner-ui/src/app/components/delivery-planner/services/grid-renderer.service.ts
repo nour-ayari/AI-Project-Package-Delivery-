@@ -199,12 +199,8 @@ export class GridRendererService {
       ) {
         continue;
       }
-      const cost = trafficCosts[rb.from.y][rb.from.x][dirIndex];
 
-      // Only draw red line if cost is 0 (truly blocked)
-      if (cost !== 0) {
-        continue; 
-      }
+      // Draw wall for every roadblock in the array, regardless of cost value
 
       let fromX = rb.from.x * cellSize;
       let fromY = rb.from.y * cellSize;

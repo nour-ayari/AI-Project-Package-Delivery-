@@ -456,24 +456,6 @@ export class DeliveryPlannerComponent
       return;
     }
 
-    if (this.gridState.roadblocks.length > 0) {
-      this.gridState.roadblocks
-        .slice(0, Math.min(3, this.gridState.roadblocks.length))
-        .forEach((rb, index) => {
-          const dirIndex = ["up", "down", "left", "right"].indexOf(
-            rb.direction
-          );
-          if (
-            dirIndex >= 0 &&
-            this.gridState.trafficCosts[rb.from.y] &&
-            this.gridState.trafficCosts[rb.from.y][rb.from.x]
-          ) {
-            const cost =
-              this.gridState.trafficCosts[rb.from.y][rb.from.x][dirIndex];
-          }
-        });
-    }
-
     // Save context
     this.ctx.save();
 
@@ -857,7 +839,6 @@ export class DeliveryPlannerComponent
         this.updateDetailedResults();
       } catch (err) {
         this.gridState.error = "Invalid grid file format";
-        console.error("Import error:", err);
       }
     };
 
